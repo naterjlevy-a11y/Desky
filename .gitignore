@@ -1,0 +1,7 @@
+# Real connection details. Copy config.example.js to config.js.
+app/config.js
+
+node_modules/
+.vercel/
+.DS_Store
+Thumbs.db

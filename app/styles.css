@@ -1,0 +1,466 @@
+/* Desk — dark, committed. Used at night, walking, one-handed. */
+
+:root{
+  --bg:#0E0D0B;
+  --raise:#191713;
+  --sunk:#221F19;
+  --edge:#2E2A22;
+  --edge-lit:#3D372C;
+  --ink:#F2EEE5;
+  --dim:#9A9488;
+  /* Was #6A655B, which measured 3.1:1 against --raise: under the 4.5:1 needed
+     for small text, and this token carries the whole metadata layer - rooms,
+     times, day counts. Unreadable outdoors, which is exactly when it is read. */
+  --faint:#8B8578;
+  --hot:#E0755C;
+  --hot-deep:#B03D26;
+  --ok:#79B79B;
+  --amb:#D9A548;
+  /* Non-class calendar rows. .slot.other referenced this and it was never
+     declared, so those rows silently kept the default grey edge. */
+  --cool:#7FA8C4;
+  /* One family for everything readable. Mono was carrying rooms, labels,
+     eyebrows and course codes, and mono at 10-12px is genuinely hard to read -
+     that was the "terrible font". Mono is now only for digits, where lining up
+     is worth something. */
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text",
+         "Segoe UI",system-ui,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+  --num:"SF Pro Text",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --sb:env(safe-area-inset-bottom,0px);
+  --st:env(safe-area-inset-top,0px);
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:var(--sans);font-size:16px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
+}
+[hidden]{display:none !important}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--hot);outline-offset:3px;border-radius:4px}
+
+/* ── sign in ───────────────────────────────────────────── */
+.gate{min-height:100dvh;display:grid;place-items:center;padding:28px 22px}
+.gate-inner{width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px}
+.mark{
+  width:56px;height:56px;border-radius:14px;
+  background:linear-gradient(152deg,var(--hot),var(--hot-deep));
+  position:relative;margin-bottom:8px;
+}
+.mark::after{
+  content:"";position:absolute;left:12px;right:12px;bottom:16px;height:3px;
+  background:var(--bg);border-radius:2px;box-shadow:0 -9px 0 var(--bg);
+}
+/* Was mono. It is the first thing on screen and mono was the whole complaint. */
+.gate h1{font-size:34px;letter-spacing:-.035em;font-weight:680;margin:0}
+.gate-sub{margin:0 0 14px;color:var(--dim);font-size:15px}
+.gate-form{display:flex;flex-direction:column;gap:12px}
+.field{display:flex;flex-direction:column;gap:7px}
+.field span{font-size:11px;letter-spacing:.06em;font-weight:600;text-transform:uppercase;color:var(--faint)}
+input[type=email]{
+  font:inherit;font-size:16px;padding:15px;background:var(--raise);color:var(--ink);
+  border:1px solid var(--edge);border-radius:12px;width:100%;
+}
+input[type=email]::placeholder{color:var(--faint)}
+.gate-msg{margin:2px 0 0;font-size:14px;color:var(--dim);min-height:1.4em}
+.gate-msg.bad{color:var(--hot)}
+.gate-msg.good{color:var(--ok)}
+.btn-primary{background:var(--hot-deep);color:#fff;font-weight:600;font-size:16px;padding:16px;border-radius:12px;width:100%}
+.btn-primary:disabled{opacity:.5}
+
+/* ── frame ─────────────────────────────────────────────── */
+.app{min-height:100dvh;padding-top:var(--st);padding-bottom:calc(66px + var(--sb))}
+.panel{padding:14px 18px 10px;display:flex;flex-direction:column;gap:16px;animation:rise .22s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+.ph{font-size:27px;letter-spacing:-.03em;margin:6px 0 0;font-weight:650;text-wrap:balance}
+.psub{margin:-10px 0 0;color:var(--dim);font-size:14px}
+/* Quiet. The accent is reserved for things that are urgent or tappable -
+   four orange headings on one screen were competing with real urgency. */
+.eyebrow{
+  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);margin:8px 0 -6px;padding-bottom:9px;
+  border-bottom:1px solid var(--edge);font-weight:500;
+}
+.stack{display:flex;flex-direction:column;gap:9px}
+
+/* ── the desk hero ─────────────────────────────────────── */
+.hero{display:flex;flex-direction:column;gap:13px;padding-top:4px}
+.hero-top{display:flex;justify-content:space-between;align-items:center}
+.clock{font-size:12px;letter-spacing:.02em;text-transform:uppercase;color:var(--faint)}
+/* Padding, not size: these were 12.5px text with no box around them, which is
+   a long way under a thumb-sized target. */
+.linkish{font-size:12.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--faint);padding:8px 2px}
+.linkish:hover{color:var(--hot)}
+.hero-h{font-size:40px;letter-spacing:-.055em;margin:0;line-height:.95;font-weight:600}
+
+.say-wrap{
+  display:flex;gap:10px;align-items:flex-end;
+  background:var(--raise);border:1px solid var(--edge);border-radius:17px;
+  padding:9px 9px 9px 16px;transition:border-color .15s;
+}
+.say-wrap:focus-within{border-color:var(--hot)}
+#say{
+  flex:1;min-width:0;font:inherit;font-size:17px;line-height:1.45;
+  background:none;border:0;color:var(--ink);resize:none;padding:11px 0;max-height:38vh;
+}
+#say::placeholder{color:var(--faint)}
+#say:focus{outline:none}
+.say-go{
+  flex:none;width:46px;height:46px;border-radius:13px;
+  background:var(--hot-deep);color:#fff;display:grid;place-items:center;
+  transition:transform .12s;
+}
+.say-go:active{transform:scale(.94)}
+.say-go:disabled{opacity:.4}
+.say-hint{margin:0 4px;font-size:12px;letter-spacing:0;color:var(--faint);min-height:1.3em}
+.say-hint.saved{color:var(--ok)}
+
+/* ── the two action rows ───────────────────────────────── */
+.actions{display:flex;flex-direction:column;gap:9px}
+.act{
+  display:grid;grid-template-columns:40px 1fr 14px;gap:13px;align-items:center;
+  padding:14px 15px;background:var(--raise);
+  border:1px solid var(--edge);border-radius:14px;text-align:left;
+  transition:border-color .15s,transform .12s;
+}
+.act:active{transform:scale(.985)}
+.act:hover{border-color:var(--edge-lit)}
+.act[disabled]{opacity:.55}
+.act-ico{
+  width:40px;height:40px;border-radius:11px;background:var(--sunk);
+  display:grid;place-items:center;color:var(--hot);
+}
+.act-ico svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.act-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.act-t{font-size:15.5px;font-weight:600}
+.act-s{font-size:13px;color:var(--dim);overflow-wrap:anywhere}
+.act-go{color:var(--faint);font-size:19px;line-height:1}
+
+/* WHAT it is comes first, then when and where. The room used to be 30px above
+   a 15px course name, so "ARTS 110" read as the name of the class. */
+.next-wrap{
+  display:grid;grid-template-areas:"lbl" "val" "det";
+  gap:1px;padding:15px 17px 16px;background:var(--raise);
+  border:1px solid var(--edge);border-left:4px solid var(--c,var(--hot));border-radius:15px;
+}
+.next-lbl{
+  grid-area:lbl;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--c,var(--hot));font-weight:700;margin-bottom:3px;
+}
+.next-val{
+  grid-area:val;font-size:23px;line-height:1.15;font-weight:650;
+  letter-spacing:-.02em;color:var(--ink);
+}
+.next-det{
+  grid-area:det;font-size:15px;color:var(--dim);font-weight:500;margin-top:4px;
+}
+.next-det b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
+.next-room{display:none}
+
+.inflight{
+  margin:0 4px;font-size:11px;letter-spacing:.08em;
+  color:var(--amb);
+}
+.inflight.ok{color:var(--ok)}
+
+/* ── cards ─────────────────────────────────────────────── */
+.slot{
+  display:grid;grid-template-columns:58px 1fr;gap:13px;padding:13px 15px;
+  background:var(--raise);border:1px solid var(--edge);
+  border-left:3px solid var(--edge);border-radius:13px;
+  transition:border-color .15s,transform .12s;
+}
+.slot[data-course]{grid-template-columns:58px 1fr 14px;cursor:pointer}
+.slot[data-course]:active{transform:scale(.985)}
+.slot[data-course]:hover{border-color:var(--c)}
+.slot.now{border-left-color:var(--hot)}
+.slot.live{border-left-color:var(--c,var(--hot));background:var(--sunk);border-color:var(--c)}
+.slot.gone{opacity:.38}
+/* Times were 11px mono. tabular-nums lines the digits up just as well in the
+   sans face and reads far better at this size. */
+.slot-t{font-family:var(--num);font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;padding-top:3px;line-height:1.45;letter-spacing:-.01em}
+.slot-t b{color:var(--ink);font-size:14px;font-weight:650}
+.slot-n{font-weight:600;font-size:15.5px;letter-spacing:-.01em}
+.slot-r{font-size:13.5px;color:var(--faint);margin-top:3px}
+.slot-r b{color:var(--dim);font-weight:600;letter-spacing:.03em}
+.slot-due{font-size:12.5px;color:var(--faint);margin-top:5px}
+.slot-due b{color:var(--amb)}
+/* A glance-level marker on a class row: ! exam, * big graded event, ^ due. */
+.mark{
+  font-style:normal;font-family:var(--mono);font-weight:700;font-size:12px;
+  display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;
+  margin-left:8px;vertical-align:1px;background:var(--sunk);color:var(--dim);
+}
+.mark.exam{background:var(--hot-deep);color:#fff}
+.mark.big{background:var(--amb);color:var(--bg)}
+.mark.due{background:var(--sunk);color:var(--amb);box-shadow:inset 0 0 0 1px var(--amb)}
+
+.flag-row{
+  display:grid;grid-template-columns:18px 1fr;gap:11px;align-items:start;
+  padding:12px 15px;background:var(--sunk);border:1px solid var(--edge);
+  border-radius:12px;font-size:14px;color:var(--dim);
+}
+.flag-row .mark{margin:1px 0 0}
+.flag-row b{color:var(--ink)}
+.flag-row em{display:block;font-style:normal;font-size:12.5px;color:var(--faint);margin-top:3px}
+.slot.other{border-left-color:var(--cool)}
+.slot.other.live{border-color:var(--cool);background:var(--sunk)}
+
+/* Finished items leave the day. This is the way back to them, and it is
+   deliberately the quietest thing on the screen. */
+.earlier{
+  align-self:flex-start;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--faint);padding:9px 2px;font-weight:600;
+}
+.earlier:hover{color:var(--dim)}
+
+.live-tag{
+  font-style:normal;font-size:9.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--bg);background:var(--c,var(--hot));
+  padding:2px 6px;border-radius:999px;margin-left:9px;vertical-align:2px;font-weight:700;
+}
+.slot .act-go{align-self:center;color:var(--faint)}
+
+.item{
+  padding:14px 15px;background:var(--raise);border:1px solid var(--edge);
+  border-left:3px solid var(--edge);border-radius:13px;
+  display:flex;flex-direction:column;gap:7px;
+}
+.item.wait{border-left-color:var(--amb)}
+.item.settled{border-left-color:var(--ok)}
+.item.unsent{border-left-color:var(--faint);border-style:dashed}
+.item.soon{border-left-color:var(--hot)}
+.item-t{font-size:15px;overflow-wrap:anywhere}
+.item-t a{color:var(--hot);overflow-wrap:anywhere}
+.item-b{font-size:14px;color:var(--dim);overflow-wrap:anywhere}
+.item-f{
+  display:flex;gap:11px;align-items:center;flex-wrap:wrap;
+  font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:600;
+}
+/* Inbox status badges. These used to reuse .tick, which is the 26px round
+   task checkbox - so the word "done" rendered crammed inside a circle. */
+.state{
+  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 7px;border:1px solid currentColor;border-radius:999px;color:var(--faint);
+}
+.state.ok{color:var(--ok)}
+.state.pend{color:var(--amb)}
+.item-f .due{color:var(--hot)}
+
+.reply{
+  align-self:flex-start;margin-top:6px;font-size:11.5px;font-weight:600;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--hot);
+  border:1px solid currentColor;border-radius:999px;padding:6px 12px;
+}
+
+/* Due soon - reads from the syllabi, so it is never empty when work exists. */
+.due-row{
+  display:grid;grid-template-columns:52px 1fr;gap:13px;align-items:start;
+  padding:13px 15px;background:var(--raise);border:1px solid var(--edge);
+  border-left:3px solid var(--c);border-radius:13px;cursor:pointer;
+}
+.due-row:hover{border-color:var(--c)}
+.due-row.urgent{background:var(--sunk)}
+.due-when{font-family:var(--num);font-size:11px;color:var(--faint);padding-top:2px;font-variant-numeric:tabular-nums}
+.due-when b{display:block;font-size:15px;color:var(--ink);font-weight:600;letter-spacing:-.01em}
+.due-row.urgent .due-when b{color:var(--hot)}
+.due-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.due-code{font-size:12px;letter-spacing:.02em;color:var(--c)}
+.due-what{font-size:15.5px;font-weight:600;line-height:1.3}
+.due-note{font-size:13px;color:var(--faint)}
+.item-out{font-size:13.5px;color:var(--dim);padding-top:8px;border-top:1px solid var(--edge)}
+
+/* ── task / info cards ─────────────────────────────────── */
+.card{
+  display:grid;grid-template-columns:26px 1fr;gap:13px;align-items:start;
+  padding:15px 16px;background:var(--raise);
+  border:1px solid var(--edge);border-radius:14px;
+  transition:opacity .2s,transform .2s,border-color .15s;
+}
+.card.soon{border-color:#4A3A22}
+.card.urgent{border-color:var(--hot-deep)}
+.card.going{opacity:0;transform:translateX(28px)}
+.tick{
+  width:26px;height:26px;border-radius:50%;flex:none;margin-top:1px;
+  border:1.6px solid var(--faint);background:transparent;
+  display:grid;place-items:center;transition:border-color .15s,background .15s;
+}
+.tick::after{
+  content:"";width:10px;height:5.5px;
+  border-left:2px solid transparent;border-bottom:2px solid transparent;
+  transform:rotate(-45deg) translate(1px,-1px);transition:border-color .15s;
+}
+.tick:hover{border-color:var(--ok)}
+.tick:hover::after{border-left-color:var(--ok);border-bottom-color:var(--ok)}
+.tick:active{background:var(--ok);border-color:var(--ok)}
+.card-body{display:flex;flex-direction:column;gap:5px;min-width:0}
+.pill{
+  align-self:flex-start;font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--amb);border:1px solid currentColor;
+  padding:2px 7px;border-radius:999px;margin-bottom:2px;
+}
+.card-t{font-size:16px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.card-t a{color:var(--hot)}
+.card-b{font-size:14.5px;color:var(--dim);overflow-wrap:anywhere;line-height:1.5}
+.card-when{
+  font-size:10.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--faint);margin-top:2px;
+}
+.card-when.hot{color:var(--hot)}
+
+/* -- course list + detail ------------------------------- */
+.course{
+  display:grid;grid-template-columns:4px 1fr 14px;gap:14px;align-items:center;
+  padding:0;background:var(--raise);border:1px solid var(--edge);
+  border-radius:14px;overflow:hidden;text-align:left;width:100%;
+  transition:border-color .15s,transform .12s;
+}
+.course:active{transform:scale(.985)}
+.course:hover{border-color:var(--c)}
+.course-bar{background:var(--c);align-self:stretch}
+.course-body{display:flex;flex-direction:column;gap:3px;padding:15px 0;min-width:0}
+.course-code{font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--c)}
+.today-dot{
+  font-style:normal;font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--bg);background:var(--c);padding:2px 6px;border-radius:999px;margin-left:9px;
+  vertical-align:2px;font-weight:700;
+}
+.course.istoday{border-color:var(--c)}
+.course-name{font-size:13.5px;color:var(--dim);line-height:1.35}
+.course-when{
+  font-size:11px;letter-spacing:.03em;
+  color:var(--faint);margin-top:5px;
+}
+.course-when b{color:var(--ink);font-weight:600}
+.course-next{font-size:12.5px;letter-spacing:0;color:var(--faint);margin-top:3px}
+.course-next b{color:var(--dim)}
+.course-next.hot b{color:var(--hot)}
+
+/* Bold carries meaning everywhere: it marks the thing you act on. */
+.next-val{font-weight:650}
+.next-det b{color:var(--ink);font-weight:600}
+.card-t strong,.item-t strong{color:var(--ink)}
+.course .act-go{padding-right:15px}
+
+/* One class, one hour, in the room you are walking to. */
+.sess-head{
+  padding:16px 17px 17px;background:var(--raise);border:1px solid var(--edge);
+  border-left:4px solid var(--c);border-radius:15px;
+}
+.sess-code{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--c);font-weight:700}
+.sess-title{font-size:23px;line-height:1.15;letter-spacing:-.02em;font-weight:650;margin:4px 0 0}
+.sess-where{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;margin-top:7px;font-size:15px;color:var(--dim)}
+.sess-where b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
+.done-tag{
+  font-style:normal;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);border:1px solid currentColor;border-radius:999px;padding:2px 7px;
+}
+.topic{
+  padding:15px 16px;background:var(--sunk);border:1px solid var(--edge);
+  border-radius:13px;font-size:16px;line-height:1.5;color:var(--ink);
+}
+.mini{
+  padding:11px 14px;background:var(--raise);border:1px solid var(--edge);
+  border-radius:11px;font-size:14px;color:var(--dim);
+}
+.mini b{color:var(--ink);font-weight:650;margin-right:8px;font-variant-numeric:tabular-nums}
+.wide-btn{
+  margin-top:6px;padding:15px;border:1px solid var(--edge);border-radius:13px;
+  background:var(--raise);color:var(--dim);font-size:15px;text-align:center;width:100%;
+}
+.wide-btn:hover{border-color:var(--hot);color:var(--ink)}
+
+.back{
+  font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--faint);padding:4px 0 2px;align-self:flex-start;
+}
+.back:hover{color:var(--hot)}
+#course-detail{display:flex;flex-direction:column;gap:16px}
+
+.gradebox{background:var(--raise);border:1px solid var(--edge);border-radius:13px;padding:6px 15px 12px}
+.grow{
+  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:baseline;
+  padding:9px 0 5px;border-bottom:1px solid var(--edge);position:relative;font-size:14px;
+}
+.grow:last-child{border-bottom:0}
+.grow b{font-family:var(--num);font-size:14px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+.grow i{
+  position:absolute;left:0;bottom:0;height:2px;width:var(--w);
+  background:var(--c);opacity:.65;border-radius:2px;
+}
+.note-row{
+  padding:12px 14px;background:var(--sunk);border:1px solid var(--edge);
+  border-radius:11px;font-size:14px;color:var(--dim);line-height:1.5;
+}
+
+.daycard{padding:13px 15px;background:var(--raise);border:1px solid var(--edge);border-radius:13px}
+.daycard h4{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.dayrow{display:grid;grid-template-columns:46px 1fr;gap:11px;font-size:14px;padding:3px 0}
+.dayrow span:first-child{font-family:var(--num);color:var(--dim);font-variant-numeric:tabular-nums}
+.dayrow em{font-style:normal;font-size:12.5px;color:var(--faint);display:block}
+
+.empty{padding:17px;background:var(--sunk);border:1px dashed var(--edge);border-radius:13px;font-size:14px;color:var(--dim)}
+
+/* ── inbox grouping + expand ───────────────────────────── */
+.head-flex{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.chip{
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  padding:8px 13px;border:1px solid var(--edge);border-radius:999px;color:var(--dim);
+}
+.chip[aria-pressed="true"]{color:var(--hot);border-color:var(--hot)}
+.grp{
+  display:flex;justify-content:space-between;align-items:baseline;
+  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);font-weight:500;margin:14px 2px 1px;
+}
+.grp:first-child{margin-top:2px}
+.grp span{color:var(--edge-lit)}
+.tappable{cursor:pointer;transition:border-color .15s}
+.tappable:hover{border-color:var(--edge-lit)}
+.more{color:var(--hot)}
+.sync{margin:2px 4px 0;font-size:12px;letter-spacing:0;color:var(--faint);overflow-wrap:anywhere}
+.sync.bad{color:var(--amb)}
+.sync.good{color:var(--ok)}
+.deskfoot{display:flex;gap:18px;padding:9px 4px 2px}
+.deskfoot button{padding:2px 0}
+.deskfoot button:disabled{opacity:.5}
+.gate-alts{display:flex;justify-content:space-between;gap:14px;padding:4px 2px 0}
+.gate-alts button{padding:6px 0}
+input[type=password]{
+  font:inherit;font-size:16px;padding:15px;background:var(--raise);color:var(--ink);
+  border:1px solid var(--edge);border-radius:12px;width:100%;
+}
+input[type=password]::placeholder{color:var(--faint)}
+
+/* ── tabs ──────────────────────────────────────────────── */
+.tabs{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  display:grid;grid-template-columns:repeat(5,1fr);
+  background:rgba(14,13,11,.94);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  border-top:1px solid var(--edge);padding-bottom:var(--sb);
+}
+.tabs button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 2px 9px;color:var(--faint);position:relative}
+.tabs svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.tabs span{font-size:10px;letter-spacing:.01em;font-weight:600;text-transform:uppercase}
+.tabs button[aria-selected="true"]{color:var(--hot)}
+.dot{position:absolute;top:8px;right:calc(50% - 17px);width:6px;height:6px;border-radius:50%;background:var(--hot)}
+
+/* ── toast ─────────────────────────────────────────────── */
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%) translateY(14px);
+  bottom:calc(78px + var(--sb));z-index:30;
+  background:var(--sunk);border:1px solid var(--edge-lit);border-radius:11px;
+  padding:12px 17px;font-size:14px;max-width:88vw;
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+}
+.toast.up{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+
+/* Deliberately single-theme. This is a night-and-corridor app; one committed
+   palette reads better than a compromised light/dark pair. */
