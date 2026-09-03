@@ -398,7 +398,11 @@ input[type=email]::placeholder{color:var(--faint)}
 }
 
 .daycard{padding:13px 15px;background:var(--raise);border:1px solid var(--edge);border-radius:13px}
+.daycard.istoday{border-color:var(--hot)}
 .daycard h4{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.daycard h4 em{font-style:normal;color:var(--faint);font-weight:500;margin-left:4px;font-variant-numeric:tabular-nums}
+.daycard h4 i{font-style:normal;color:var(--amb);letter-spacing:.06em;margin-left:7px}
+.dayrow.off{color:var(--faint)}
 .dayrow{display:grid;grid-template-columns:46px 1fr;gap:11px;font-size:14px;padding:3px 0}
 .dayrow span:first-child{font-family:var(--num);color:var(--dim);font-variant-numeric:tabular-nums}
 .dayrow em{font-style:normal;font-size:12.5px;color:var(--faint);display:block}

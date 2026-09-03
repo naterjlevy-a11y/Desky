@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY } from "/config.js";
 
-const VERSION = "7.2.0";
+const VERSION = "7.3.0";
 const TZ = "America/Toronto";
 const AUTH = "desk.auth";
 const QUEUE = "desk.queue";
@@ -168,6 +168,37 @@ const nowMin = () => { const p = parts(); return +p.hour * 60 + +p.minute; };
 const todayISO = () => { const p = parts(); return `${p.year}-${p.month}-${p.day}`; };
 const daysUntil = (iso) =>
   Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(todayISO() + "T00:00:00Z")) / 864e5);
+
+/* Days the timetable does NOT run. WEEK used to be applied blindly to whatever
+   weekday it was, so the app would have marched you into a lecture hall on the
+   Friday of reading break. Source: the registrar's key dates - reading break
+   is Fri Oct 9 to Wed Oct 14 inclusive. */
+const NO_CLASS = {
+  "2026-09-07": "Labour Day",
+  "2026-10-09": "Reading break",
+  "2026-10-12": "Thanksgiving",
+  "2026-10-13": "Reading break",
+  "2026-10-14": "Reading break",
+};
+
+/* Thu Dec 3 runs a MONDAY timetable - a makeup day. Monday's classes
+   happen that Thursday; Thursday's do not. */
+const DAY_OVERRIDE = { "2026-12-03": "Mon" };
+
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const isoPlus = (iso, n) => {
+  const d = new Date(iso + "T12:00:00Z");       // midday, so no DST edge can shift the date
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const weekdayOf = (iso) => DAYS[new Date(iso + "T12:00:00Z").getUTCDay()];
+
+// Which weekday's timetable a date actually runs. null means no classes at all.
+const scheduleDay = (iso) => (NO_CLASS[iso] ? null : DAY_OVERRIDE[iso] || weekdayOf(iso));
+
+/* The single source of truth for "the classes on this date". openSession
+   indexes into this same list, so it must never be computed two ways. */
+const rowsOn = (iso) => { const d = scheduleDay(iso); return d ? WEEK.filter((r) => r[0] === d) : []; };
 
 const load = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
 const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
@@ -457,11 +488,8 @@ const hhmm = (ts) => new Intl.DateTimeFormat("en-GB", { timeZone: TZ,
    left the list either, so the day only ever grew. Finished things now drop
    out; the count stays behind one tap on the rare occasion he wants it back. */
 function todayEntries() {
-  const p = parts();
   const n = nowMin();
-  const out = [];
-
-  WEEK.forEach((r) => { if (r[0] === p.weekday) out.push({ row: r }); });
+  const out = rowsOn(todayISO()).map((row) => ({ row }));
   // idx has to be the position within TODAY's rows - openSession indexes into
   // that same filtered list.
   out.forEach((e, i) => { e.idx = i; e.from = toMin(e.row[1]); e.to = toMin(e.row[2]);
@@ -528,7 +556,8 @@ let showEarlier = false;
 function renderToday() {
   const host = $("today");
   const n = nowMin();
-  const rows = WEEK.filter((r) => r[0] === parts().weekday);
+  const today = todayISO();
+  const off = NO_CLASS[today];
   const all = todayEntries();
   const left = all.filter((e) => !e.over);
   const past = all.filter((e) => e.over);
@@ -536,7 +565,12 @@ function renderToday() {
   const nextI = left.findIndex((e) => !e.live);
   let html = left.map((e, i) => entryHTML(e, i === nextI)).join("");
 
-  if (!left.length) {
+  if (off) {
+    html = `<div class="empty"><b>${esc(off)}</b> &mdash; no classes today.</div>` + html;
+  } else if (DAY_OVERRIDE[today]) {
+    html = `<div class="empty">Makeup day &mdash; today runs a <b>${
+      esc(DAY_OVERRIDE[today])}</b> timetable.</div>` + html;
+  } else if (!left.length) {
     html = `<div class="empty">${past.length
       ? "That's your whole day. Nothing left."
       : "Nothing scheduled today."}</div>`;
@@ -548,6 +582,7 @@ function renderToday() {
   }
   host.innerHTML = html;
 
+  const rows = rowsOn(today);
   paintNext(rows, rows.findIndex((r) => toMin(r[1]) >= n), n);
 }
 
@@ -578,17 +613,19 @@ function paintNext(rows, nextIdx, n) {
     return;
   }
 
-  // Nothing left today. Look forward for the next day that has a class.
-  const order = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const todayIdx = order.indexOf(parts().weekday);
-  for (let step = 1; step <= 7; step++) {
-    const day = order[(todayIdx + step) % 7];
-    const next = WEEK.filter((r) => r[0] === day).sort((a, b) => toMin(a[1]) - toMin(b[1]))[0];
-    if (next) {
-      const c = COURSES[codeOf(next[3])];
-      setIt(step === 1 ? "Tomorrow" : day, next[3], next[1], next[4], c && c.colour);
-      return;
-    }
+  /* Nothing left today. Walk forward by DATE, not by weekday name, so reading
+     break and holidays are skipped instead of being marched into. Two weeks is
+     enough to clear the longest break in the term. */
+  for (let step = 1; step <= 16; step++) {
+    const iso = isoPlus(todayISO(), step);
+    const next = rowsOn(iso).sort((a, b) => toMin(a[1]) - toMin(b[1]))[0];
+    if (!next) continue;
+    const c = COURSES[codeOf(next[3])];
+    const lbl = step === 1 ? "Tomorrow"
+              : step < 7 ? weekdayOf(iso)
+              : `${weekdayOf(iso)} ${+iso.slice(8)}/${+iso.slice(5, 7)}`;
+    setIt(lbl, next[3], next[1], next[4], c && c.colour);
+    return;
   }
   setIt("Next", "Nothing scheduled", "", "", null);
 }
@@ -719,12 +756,12 @@ function nextFor(code) {
 }
 
 function renderCourses() {
-  const today = parts().weekday;
   const n = nowMin();
+  const todayRows = rowsOn(todayISO());
 
   // Courses meeting today, soonest first; everything else after.
   const list = Object.entries(COURSES).map(([code, c]) => {
-    const mine = WEEK.filter((r) => r[0] === today && codeOf(r[3]) === code);
+    const mine = todayRows.filter((r) => codeOf(r[3]) === code);
     const slot = mine.filter((r) => toMin(r[2]) >= n)[0] || mine[0] || null;
     return { code, c, mine, slot, sort: mine.length ? (slot ? toMin(slot[1]) : 0) : 99999 };
   }).sort((a, b) => a.sort - b.sort);
@@ -764,9 +801,8 @@ function openCourse(code) {
   const upcoming = (c.dates || []).map((d) => ({ iso: d[0], what: d[1], note: d[2], away: daysUntil(d[0]) }));
 
   // What this course means TODAY - the session, and anything attached to it.
-  const today = parts().weekday;
   const n = nowMin();
-  const todaySlots = WEEK.filter((r) => r[0] === today && codeOf(r[3]) === code);
+  const todaySlots = rowsOn(todayISO()).filter((r) => codeOf(r[3]) === code);
   const attached = forCourse(code, 10);
   const todayBlock = todaySlots.length ? `
     <h3 class="eyebrow">Today</h3>
@@ -853,8 +889,7 @@ function openCourse(code) {
    room, in that hour - not the whole syllabus. The syllabus is one tap further. */
 function openSession(code, idx) {
   const c = COURSES[code];
-  const rows = WEEK.filter((r) => r[0] === parts().weekday);
-  const r = rows[idx];
+  const r = rowsOn(todayISO())[idx];
   if (!c || !r) return;
 
   const day = todayISO();
@@ -977,10 +1012,24 @@ function render() {
     ? `${soon} thing${soon === 1 ? "" : "s"} due in the next week`
     : `Nothing due this week. ${p2.weekday} ${p2.day}/${p2.month}.`;
 
-  $("week").innerHTML = ["Mon", "Tue", "Wed", "Thu", "Fri"].map((d) =>
-    `<div class="daycard"><h4>${d}</h4>` + WEEK.filter((r) => r[0] === d).map((r) =>
-      `<div class="dayrow"><span>${r[1]}</span><span>${esc(r[3])}<em>${esc(r[4])}</em></span></div>`
-    ).join("") + `</div>`).join("");
+  /* THIS week, by date - not a generic Mon-Fri template. It used to print the
+     timetable regardless of the calendar, so reading break looked like an
+     ordinary week. */
+  const wd = DAYS.indexOf(weekdayOf(todayISO()));
+  const monday = isoPlus(todayISO(), wd === 0 ? 1 : 1 - wd);
+  $("week").innerHTML = [0, 1, 2, 3, 4].map((i) => {
+    const iso = isoPlus(monday, i);
+    const off = NO_CLASS[iso];
+    const rows = rowsOn(iso);
+    const head = `${weekdayOf(iso)} <em>${+iso.slice(8)}/${+iso.slice(5, 7)}</em>`;
+    const body = off
+      ? `<div class="dayrow off"><span>&mdash;</span><span>${esc(off)}</span></div>`
+      : rows.map((r) =>
+          `<div class="dayrow"><span>${r[1]}</span><span>${esc(r[3])}<em>${esc(r[4])}</em></span></div>`
+        ).join("") || `<div class="dayrow off"><span>&mdash;</span><span>No classes</span></div>`;
+    return `<div class="daycard${iso === todayISO() ? " istoday" : ""}"><h4>${head}${
+      DAY_OVERRIDE[iso] ? ` <i>runs ${esc(DAY_OVERRIDE[iso])}</i>` : ""}</h4>${body}</div>`;
+  }).join("");
 
   /* Honest sync state on the Desk. Never show nothing when something is wrong. */
   const s = $("sync");
