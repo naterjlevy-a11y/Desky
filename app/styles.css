@@ -32,6 +32,9 @@
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* Kills the 300ms tap delay and the synthetic click that came with it - the
+   ghost click was what let one tap tick off several tasks in a row. */
+button,a,[role=tab],.tick,.card,.slot,.course,.due-row{touch-action:manipulation}
 html,body{height:100%}
 body{
   margin:0;background:var(--bg);color:var(--ink);
@@ -279,11 +282,14 @@ input[type=email]::placeholder{color:var(--faint)}
   display:grid;grid-template-columns:26px 1fr;gap:13px;align-items:start;
   padding:15px 16px;background:var(--raise);
   border:1px solid var(--edge);border-radius:14px;
-  transition:opacity .2s,transform .2s,border-color .15s;
+  transition:opacity .2s,transform .2s,border-color .15s,
+             height .2s ease,padding .2s ease,margin .2s ease;
 }
 .card.soon{border-color:#4A3A22}
 .card.urgent{border-color:var(--hot-deep)}
-.card.going{opacity:0;transform:translateX(28px)}
+/* Collapses in place instead of vanishing, so the rows below never jump up
+   under a finger that is still on the screen. */
+.card.going{opacity:0;transform:translateX(28px);overflow:hidden;border-color:transparent}
 .tick{
   width:26px;height:26px;border-radius:50%;flex:none;margin-top:1px;
   border:1.6px solid var(--faint);background:transparent;
@@ -468,3 +474,21 @@ input[type=password]::placeholder{color:var(--faint)}
 
 /* Deliberately single-theme. This is a night-and-corridor app; one committed
    palette reads better than a compromised light/dark pair. */
+
+/* School opens with the two answers, not four headings. */
+.snaps{display:flex;flex-direction:column;gap:9px;margin-top:4px}
+.snap{
+  display:grid;gap:2px;padding:14px 16px;background:var(--raise);
+  border:1px solid var(--edge);border-left:3px solid var(--hot);border-radius:14px;
+}
+.snap.due{border-left-color:var(--amb)}
+.snap.due[data-course]{cursor:pointer}
+.snap.due[data-course]:hover{border-color:var(--amb)}
+.snap-k{
+  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--hot);font-weight:700;
+}
+.snap.due .snap-k{color:var(--amb)}
+.snap-v{font-size:20px;font-weight:650;letter-spacing:-.02em;line-height:1.2;margin-top:2px}
+.snap-d{font-size:14px;color:var(--dim);margin-top:3px}
+.snap-d b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}

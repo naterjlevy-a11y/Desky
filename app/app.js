@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY } from "/config.js";
 
-const VERSION = "7.3.0";
+const VERSION = "7.4.0";
 const TZ = "America/Toronto";
 const AUTH = "desk.auth";
 const QUEUE = "desk.queue";
@@ -726,19 +726,54 @@ function dueRow(d) {
   </div>`;
 }
 
+/* One tap used to tick off a whole column of tasks.
+ *
+ * On a phone a tap fires a synthetic click roughly 300ms after your finger
+ * leaves the glass. The old code removed the row and re-rendered the list as
+ * soon as the server answered - which took less than that - so every row below
+ * jumped up one position. The ghost click then landed on the same screen
+ * coordinates, which now belonged to the NEXT card's checkbox. That removed
+ * the next row, everything jumped again, and it walked down the list.
+ *
+ * Three guards, because each one alone still leaves a hole: never process the
+ * same card twice, ignore every checkbox for a moment after one fires, and
+ * collapse the row in place rather than yanking it out from under the finger.
+ */
+const ticking = new Set();
+let tickLockUntil = 0;
+
 async function completeCard(id, el) {
+  if (ticking.has(id) || Date.now() < tickLockUntil) return;
+  ticking.add(id);
+  tickLockUntil = Date.now() + 600;
+
+  // Freeze the current height so the collapse animates from a real number.
+  el.style.height = `${el.offsetHeight}px`;
   el.classList.add("going");
+  requestAnimationFrame(() => {
+    el.style.height = "0px";
+    el.style.paddingTop = "0px";
+    el.style.paddingBottom = "0px";
+    el.style.marginBottom = "-9px";      // absorb the stack gap
+  });
+
   try {
     await api(`cards?id=eq.${id}`, {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
       body: JSON.stringify({ done: true }),
     });
+    // Let the collapse finish before the list reflows, so nothing jumps while
+    // a stray click could still be in flight.
+    await new Promise((r) => setTimeout(r, 200));
     cards = cards.filter((c) => c.id !== id);
     render();
   } catch (e) {
+    el.style.cssText = "";
     el.classList.remove("going");
     toast(`Couldn't tick that off: ${e.message}`);
+  } finally {
+    ticking.delete(id);
   }
 }
 
@@ -1006,11 +1041,38 @@ function render() {
   fill("work-cards", cards.filter((c) => c.section === "internships").map(cardRow).join(""),
     "Nothing yet. Ask me to look for internships and they'll land here.");
 
-  const soon = syllabusDue(7).length;
-  const p2 = parts();
-  $("school-sub").textContent = soon
-    ? `${soon} thing${soon === 1 ? "" : "s"} due in the next week`
-    : `Nothing due this week. ${p2.weekday} ${p2.day}/${p2.month}.`;
+  /* School used to open with a headline, a vague subtitle and then four
+     headings before it said anything. It now answers the two questions the
+     screen exists for, in one line each: where do I go next, and what is the
+     next thing actually due. */
+  const nOfDay = nowMin();
+  let nextClass = null;
+  for (let step = 0; step <= 16 && !nextClass; step++) {
+    const iso = isoPlus(todayISO(), step);
+    const r = rowsOn(iso)
+      .sort((a, b) => toMin(a[1]) - toMin(b[1]))
+      .find((row) => step > 0 || toMin(row[2]) >= nOfDay);
+    if (r) nextClass = { r, iso, step, live: step === 0 && toMin(r[1]) <= nOfDay };
+  }
+  const nextDue = syllabusDue(60)[0];
+  const when = (iso, step) => step === 0 ? "today" : step === 1 ? "tomorrow" : weekdayOf(iso);
+
+  $("school-next").innerHTML = [
+    nextClass ? `<div class="snap">
+        <span class="snap-k">${nextClass.live ? "In class" : "Next class"}</span>
+        <span class="snap-v">${esc(nextClass.r[3])}</span>
+        <span class="snap-d"><b>${nextClass.live ? `until ${nextClass.r[2]}`
+          : `${when(nextClass.iso, nextClass.step)} ${nextClass.r[1]}`}</b> &middot; ${
+          esc(PLACES[nextClass.r[4]] || nextClass.r[4])}</span>
+      </div>` : "",
+    nextDue ? `<div class="snap due"${COURSES[nextDue.code] ? ` data-course="${esc(nextDue.code)}"` : ""}>
+        <span class="snap-k">Next due</span>
+        <span class="snap-v">${esc(nextDue.what)}</span>
+        <span class="snap-d"><b>${nextDue.away === 0 ? "today"
+          : nextDue.away === 1 ? "tomorrow" : `in ${nextDue.away} days`}</b>${
+          nextDue.code ? ` &middot; ${esc(nextDue.code)}` : ""}</span>
+      </div>` : "",
+  ].join("") || `<div class="empty">Nothing scheduled.</div>`;
 
   /* THIS week, by date - not a generic Mon-Fri template. It used to print the
      timetable regardless of the calendar, so reading break looked like an
