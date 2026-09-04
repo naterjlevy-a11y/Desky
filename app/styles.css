@@ -318,33 +318,6 @@ input[type=email]::placeholder{color:var(--faint)}
 }
 .card-when.hot{color:var(--hot)}
 
-/* -- course list + detail ------------------------------- */
-.course{
-  display:grid;grid-template-columns:4px 1fr 14px;gap:14px;align-items:center;
-  padding:0;background:var(--raise);border:1px solid var(--edge);
-  border-radius:14px;overflow:hidden;text-align:left;width:100%;
-  transition:border-color .15s,transform .12s;
-}
-.course:active{transform:scale(.985)}
-.course:hover{border-color:var(--c)}
-.course-bar{background:var(--c);align-self:stretch}
-.course-body{display:flex;flex-direction:column;gap:3px;padding:15px 0;min-width:0}
-.course-code{font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--c)}
-.today-dot{
-  font-style:normal;font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;
-  color:var(--bg);background:var(--c);padding:2px 6px;border-radius:999px;margin-left:9px;
-  vertical-align:2px;font-weight:700;
-}
-.course.istoday{border-color:var(--c)}
-.course-name{font-size:13.5px;color:var(--dim);line-height:1.35}
-.course-when{
-  font-size:11px;letter-spacing:.03em;
-  color:var(--faint);margin-top:5px;
-}
-.course-when b{color:var(--ink);font-weight:600}
-.course-next{font-size:12.5px;letter-spacing:0;color:var(--faint);margin-top:3px}
-.course-next b{color:var(--dim)}
-.course-next.hot b{color:var(--hot)}
 
 /* Bold carries meaning everywhere: it marks the thing you act on. */
 .next-val{font-weight:650}
@@ -403,12 +376,6 @@ input[type=email]::placeholder{color:var(--faint)}
   border-radius:11px;font-size:14px;color:var(--dim);line-height:1.5;
 }
 
-.daycard{padding:13px 15px;background:var(--raise);border:1px solid var(--edge);border-radius:13px}
-.daycard.istoday{border-color:var(--hot)}
-.daycard h4{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:700}
-.daycard h4 em{font-style:normal;color:var(--faint);font-weight:500;margin-left:4px;font-variant-numeric:tabular-nums}
-.daycard h4 i{font-style:normal;color:var(--amb);letter-spacing:.06em;margin-left:7px}
-.dayrow.off{color:var(--faint)}
 .dayrow{display:grid;grid-template-columns:46px 1fr;gap:11px;font-size:14px;padding:3px 0}
 .dayrow span:first-child{font-family:var(--num);color:var(--dim);font-variant-numeric:tabular-nums}
 .dayrow em{font-style:normal;font-size:12.5px;color:var(--faint);display:block}
@@ -475,20 +442,79 @@ input[type=password]::placeholder{color:var(--faint)}
 /* Deliberately single-theme. This is a night-and-corridor app; one committed
    palette reads better than a compromised light/dark pair. */
 
-/* School opens with the two answers, not four headings. */
-.snaps{display:flex;flex-direction:column;gap:9px;margin-top:4px}
-.snap{
-  display:grid;gap:2px;padding:14px 16px;background:var(--raise);
-  border:1px solid var(--edge);border-left:3px solid var(--hot);border-radius:14px;
+
+/* ── School: segmented control ─────────────────────────── */
+.seg{
+  display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;
+  background:var(--sunk);border:1px solid var(--edge);border-radius:12px;margin-top:4px;
 }
-.snap.due{border-left-color:var(--amb)}
-.snap.due[data-course]{cursor:pointer}
-.snap.due[data-course]:hover{border-color:var(--amb)}
-.snap-k{
-  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--hot);font-weight:700;
+.seg-b{
+  padding:9px 8px;border-radius:9px;font-size:13px;font-weight:650;
+  letter-spacing:.02em;color:var(--faint);transition:background .15s,color .15s;
 }
-.snap.due .snap-k{color:var(--amb)}
-.snap-v{font-size:20px;font-weight:650;letter-spacing:-.02em;line-height:1.2;margin-top:2px}
-.snap-d{font-size:14px;color:var(--dim);margin-top:3px}
-.snap-d b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
+.seg-b[aria-selected="true"]{background:var(--raise);color:var(--ink)}
+.seg-n{
+  font-style:normal;font-size:10.5px;font-weight:700;margin-left:6px;
+  color:var(--amb);vertical-align:1px;
+}
+.seg-n:empty{display:none}
+
+/* ── School: the week as a selector, not a wall of text ── */
+.daystrip{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.day{
+  display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 2px 8px;
+  background:var(--raise);border:1px solid var(--edge);border-radius:11px;
+  position:relative;transition:border-color .15s,background .15s;
+}
+.day.off{opacity:.45}
+.day.istoday{border-color:var(--hot)}
+.day.on{background:var(--sunk);border-color:var(--edge-lit)}
+.day.on.istoday{border-color:var(--hot)}
+.day-w{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.day-n{font-size:17px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.15}
+.day-c{font-size:11px;color:var(--dim);letter-spacing:.12em;line-height:1}
+.day.on .day-c{color:var(--hot)}
+.day-flag{
+  font-style:normal;font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--amb);position:absolute;bottom:1px;
+}
+
+/* ── School: the class row, hierarchy inverted ─────────── */
+/* The room is the largest thing. He knows which class he has; he is looking
+   for the door. */
+.slot-code{font-size:13px;font-weight:600;color:var(--c,var(--dim));letter-spacing:.01em}
+.slot-room{font-size:18px;font-weight:650;line-height:1.2;letter-spacing:-.015em;margin-top:1px;color:var(--ink)}
+.slot-kind{
+  font-size:12.5px;color:var(--faint);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.slot.ahead{border-left-color:var(--edge-lit);cursor:pointer}
+.next-tag{
+  font-style:normal;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--hot);border:1px solid currentColor;border-radius:999px;
+  padding:1px 6px;margin-left:9px;vertical-align:2px;font-weight:700;
+}
+.note-day{
+  padding:15px 16px;background:var(--sunk);border:1px solid var(--edge);
+  border-left:3px solid var(--dim);border-radius:12px;
+}
+.note-day.amb{border-left-color:var(--amb)}
+.note-day b{display:block;font-size:16px;color:var(--ink);font-weight:650}
+.note-day span{display:block;font-size:13.5px;color:var(--faint);margin-top:3px}
+
+/* ── School: course chips ──────────────────────────────── */
+.chips{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:2px}
+.chip-c{
+  display:flex;flex-direction:column;align-items:center;gap:0;padding:8px 2px 7px;
+  background:var(--raise);border:1px solid var(--edge);
+  border-bottom:2px solid var(--c);border-radius:10px;
+}
+.chip-c span{font-size:9.5px;letter-spacing:.06em;color:var(--faint);font-weight:600}
+.chip-c b{font-size:13px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+.chip-c:hover{border-color:var(--c)}
+
+/* An exam reads as an exam from sixty days out. */
+.due-row.exam{border-left-color:var(--hot)}
+.due-code .mark{margin-left:7px;width:16px;height:16px;font-size:11px}
+.loglink{align-self:flex-start;position:relative;padding-right:14px}
+.loglink .dot{top:6px;right:0}

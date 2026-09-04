@@ -100,6 +100,10 @@
     </div>
 
     <p class="sync" id="sync"></p>
+    <!-- The Log used to own a fifth of the tab bar. It is a record, not a
+         destination - it lives here now, one tap away, with a dot when
+         something is still in flight. -->
+    <button id="golog" class="linkish loglink">Log<i class="dot" id="dot-inbox" hidden></i></button>
     <div class="deskfoot" id="deskfoot" hidden>
       <button id="selftest" class="linkish">Test connection</button>
       <button id="setpw" class="linkish">Set a password</button>
@@ -128,19 +132,20 @@
   <!-- 4 · SCHOOL -->
   <section id="p-school" class="panel" hidden>
     <div id="school-list">
-      <div id="school-next" class="snaps"></div>
+      <div class="seg" role="tablist" aria-label="School view">
+        <button class="seg-b" role="tab" data-seg="classes" aria-selected="true">Classes</button>
+        <button class="seg-b" role="tab" data-seg="due" aria-selected="false">Due<i class="seg-n" id="seg-due-n"></i></button>
+      </div>
 
-      <h3 class="eyebrow">Today</h3>
-      <div id="today" class="stack"></div>
+      <div id="v-classes">
+        <div id="daystrip" class="daystrip"></div>
+        <div id="today" class="stack"></div>
+        <div id="chips" class="chips"></div>
+      </div>
 
-      <h3 class="eyebrow">Due soon</h3>
-      <div id="school-cards" class="stack"></div>
-
-      <h3 class="eyebrow">This week</h3>
-      <div id="week" class="stack"></div>
-
-      <h3 class="eyebrow">All courses</h3>
-      <div id="courses" class="stack"></div>
+      <div id="v-due" hidden>
+        <div id="school-cards" class="stack"></div>
+      </div>
     </div>
     <div id="course-detail" hidden></div>
   </section>
@@ -148,7 +153,7 @@
   <!-- 5 · WORK -->
   <section id="p-work" class="panel" hidden>
     <h2 class="ph">Work</h2>
-    <p class="psub">Internships, applications, anything career.</p>
+    <p class="psub" id="work-sub">Internships and applications.</p>
     <div id="work-cards" class="stack"></div>
   </section>
 
@@ -168,10 +173,6 @@
     <button role="tab" data-panel="work" aria-selected="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v11H4zM9 8V6a2 2 0 012-2h2a2 2 0 012 2v2M4 13h16"/></svg>
       <span>Work</span>
-    </button>
-    <button role="tab" data-panel="inbox" aria-selected="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4M4 13l2-7h12l2 7v5H4z"/></svg>
-      <span>Log</span><i class="dot" id="dot-inbox" hidden></i>
     </button>
   </nav>
 

@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY } from "/config.js";
 
-const VERSION = "7.4.0";
+const VERSION = "8.0.0";
 const TZ = "America/Toronto";
 const AUTH = "desk.auth";
 const QUEUE = "desk.queue";
@@ -417,7 +417,7 @@ async function pull() {
     const [c, k, a] = await Promise.all([
       api("captures?select=*&order=said_at.desc&limit=100"),
       api("cards?select=*&done=eq.false&order=due.asc.nullslast&limit=80"),
-      api(`agenda?select=*&day=gte.${todayISO()}&order=day.asc,starts_at.asc&limit=120`),
+      api(`agenda?select=*&day=gte.${isoPlus(todayISO(), -7)}&order=day.asc,starts_at.asc&limit=160`),
     ]);
     captures = c || []; cards = k || []; agenda = a || [];
     lastPull = Date.now();
@@ -487,15 +487,16 @@ const hhmm = (ts) => new Intl.DateTimeFormat("en-GB", { timeZone: TZ,
    is how a 21:00 reminder ended up sitting above an 11:40 one. Nothing ever
    left the list either, so the day only ever grew. Finished things now drop
    out; the count stays behind one tap on the rare occasion he wants it back. */
-function todayEntries() {
+function entriesFor(dayISO) {
+  const isToday = dayISO === todayISO();
   const n = nowMin();
-  const out = rowsOn(todayISO()).map((row) => ({ row }));
-  // idx has to be the position within TODAY's rows - openSession indexes into
-  // that same filtered list.
+  const out = rowsOn(dayISO).map((row) => ({ row }));
+  // idx is the position within THAT DAY's rows - openSession indexes the same
+  // filtered list, which is why it has to take the date as well as the index.
   out.forEach((e, i) => { e.idx = i; e.from = toMin(e.row[1]); e.to = toMin(e.row[2]);
                           e.code = codeOf(e.row[3]); });
 
-  for (const a of agendaFor(todayISO())) {
+  for (const a of agendaFor(dayISO)) {
     const from = a.starts_at ? minOf(a.starts_at) : null;
     // No end time means a moment, not a block. Half an hour is long enough to
     // still be useful and short enough that it clears itself off the screen.
@@ -507,12 +508,21 @@ function todayEntries() {
   // because they are deadlines rather than appointments.
   out.sort((a, b) => (a.from ?? -1) - (b.from ?? -1));
   for (const e of out) {
-    e.live = e.from !== null && e.from <= n && n <= e.to;
-    e.over = e.to !== null && e.to < n;
+    // Only TODAY has a live or a finished state. A Monday row read on a
+    // Wednesday is reference, not a to-do, so it is never dimmed or hidden.
+    e.live = isToday && e.from !== null && e.from <= n && n <= e.to;
+    e.over = isToday && e.to !== null && e.to < n;
+    e.day = dayISO;
   }
   return out;
 }
 
+/* The room is the largest text on the row.
+ *
+ * It used to be 13.5px dim underneath a 15.5px course name, which is exactly
+ * backwards: he knows which class he has, he is trying to find the door. The
+ * name shrinks to a code, the room grows and is spelled out through PLACES,
+ * and the topic drops to one clamped line underneath. */
 function entryHTML(e, isNext) {
   if (e.row) {
     const r = e.row;
@@ -521,16 +531,18 @@ function entryHTML(e, isNext) {
     const soonest = attached[0];
     const mark = soonest ? markFor(soonest.what) : null;
     const cls = e.live ? "slot live" : e.over ? "slot gone" : isNext ? "slot now" : "slot";
-    return `<div class="${cls}"${e.code ? ` data-session="${esc(e.code)}|${e.idx}"` : ""}
+    // "MECH 292 lab" -> kind "lab"; a bare code means a lecture.
+    const kind = e.code ? (r[3].replace(e.code, "").trim() || "Lecture") : r[3];
+    const topic = e.code ? topicFor(e.code, e.day) : null;
+    return `<div class="${cls}"${e.code ? ` data-session="${esc(e.code)}|${esc(e.day)}|${e.idx}"` : ""}
         ${c ? ` style="--c:${c.colour}"` : ""}>
       <div class="slot-t"><b>${r[1]}</b><br>${r[2]}</div>
       <div>
-        <div class="slot-n">${esc(r[3])}${e.live ? '<i class="live-tag">now</i>' : ""}${
-          mark ? `<i class="mark ${mark.cls}" title="${esc(mark.label)}">${mark.g}</i>` : ""}</div>
-        <div class="slot-r">${esc(PLACES[r[4]] || r[4])}</div>
-        ${soonest ? `<div class="slot-due">${esc(soonest.what)} &middot; <b>${
-          soonest.away === 0 ? "today" : soonest.away === 1 ? "tomorrow" : `${soonest.away} days`
-        }</b></div>` : ""}
+        <div class="slot-code">${esc(e.code || r[3])}${
+          e.live ? '<i class="live-tag">now</i>' : isNext ? '<i class="next-tag">next</i>' : ""}${
+          mark && mark.g !== "-" ? `<i class="mark ${mark.cls}" title="${esc(mark.label)}">${mark.g}</i>` : ""}</div>
+        <div class="slot-room">${esc(PLACES[r[4]] || r[4])}</div>
+        <div class="slot-kind">${esc(kind)}${topic ? ` &middot; ${esc(topic)}` : ""}</div>
       </div>
       ${e.code ? '<span class="act-go" aria-hidden="true">&rsaquo;</span>' : ""}
     </div>`;
@@ -552,35 +564,108 @@ function entryHTML(e, isNext) {
 }
 
 let showEarlier = false;
+let schoolSeg = "classes";   // always resets to Classes when School is opened
+let schoolDay = null;        // ISO being viewed; null means pick automatically
+
+// Monday of the current week. On a weekend, look forward to the next one.
+function mondayOf(iso) {
+  const wd = DAYS.indexOf(weekdayOf(iso));
+  return isoPlus(iso, wd === 0 ? 1 : wd === 6 ? 2 : 1 - wd);
+}
+
+/* Which day Classes opens on: today while it still has a class left, otherwise
+   the next day that has any. The default is never an empty screen. */
+function defaultDay() {
+  const t = todayISO();
+  const n = nowMin();
+  if (rowsOn(t).some((r) => toMin(r[2]) >= n)) return t;
+  for (let s = 1; s <= 16; s++) if (rowsOn(isoPlus(t, s)).length) return isoPlus(t, s);
+  return t;
+}
+
+/* The week is a selector, not a wall of text. Five pills replace fifteen rows
+   of 14px type he was never going to read, and every other day is one tap
+   away with no scrolling. */
+function renderDayStrip(sel) {
+  const today = todayISO();
+  const mon = mondayOf(today);
+  $("daystrip").innerHTML = [0, 1, 2, 3, 4].map((i) => {
+    const iso = isoPlus(mon, i);
+    const n = rowsOn(iso).length;
+    const off = NO_CLASS[iso];
+    const cls = ["day", iso === sel && "on", iso === today && "istoday", off && "off"]
+      .filter(Boolean).join(" ");
+    return `<button class="${cls}" data-day="${iso}">
+      <span class="day-w">${weekdayOf(iso)}</span>
+      <span class="day-n">${+iso.slice(8)}</span>
+      <span class="day-c">${n ? "&middot;".repeat(n) : "&mdash;"}</span>
+      ${DAY_OVERRIDE[iso] ? `<i class="day-flag">${esc(DAY_OVERRIDE[iso])}</i>` : ""}
+    </button>`;
+  }).join("");
+}
+
+function renderChips() {
+  $("chips").innerHTML = Object.entries(COURSES).map(([code, c]) => {
+    const [dept, num] = code.split(" ");
+    return `<button class="chip-c" data-course="${esc(code)}" style="--c:${c.colour}">
+      <span>${esc(dept)}</span><b>${esc(num)}</b></button>`;
+  }).join("");
+}
+
+/* A day with nothing on it points at the next real class instead of dead-ending. */
+function nextClassRow(fromISO) {
+  for (let s = 1; s <= 16; s++) {
+    const iso = isoPlus(fromISO, s);
+    const r = rowsOn(iso).sort((a, b) => toMin(a[1]) - toMin(b[1]))[0];
+    if (!r) continue;
+    const c = COURSES[codeOf(r[3])];
+    return `<div class="slot ahead" data-day="${iso}"${c ? ` style="--c:${c.colour}"` : ""}>
+      <div class="slot-t"><b>${weekdayOf(iso)} ${+iso.slice(8)}</b><br>${r[1]}</div>
+      <div>
+        <div class="slot-code">${esc(codeOf(r[3]) || r[3])}</div>
+        <div class="slot-room">${esc(PLACES[r[4]] || r[4])}</div>
+        <div class="slot-kind">back to class</div>
+      </div>
+      <span class="act-go" aria-hidden="true">&rsaquo;</span>
+    </div>`;
+  }
+  return "";
+}
 
 function renderToday() {
   const host = $("today");
   const n = nowMin();
   const today = todayISO();
-  const off = NO_CLASS[today];
-  const all = todayEntries();
+  const day = schoolDay || defaultDay();
+  const isToday = day === today;
+  const off = NO_CLASS[day];
+  const all = entriesFor(day);
   const left = all.filter((e) => !e.over);
   const past = all.filter((e) => e.over);
 
-  const nextI = left.findIndex((e) => !e.live);
-  let html = left.map((e, i) => entryHTML(e, i === nextI)).join("");
+  const nextI = isToday ? left.findIndex((e) => !e.live) : -1;
+  let html = "";
 
   if (off) {
-    html = `<div class="empty"><b>${esc(off)}</b> &mdash; no classes today.</div>` + html;
-  } else if (DAY_OVERRIDE[today]) {
-    html = `<div class="empty">Makeup day &mdash; today runs a <b>${
-      esc(DAY_OVERRIDE[today])}</b> timetable.</div>` + html;
-  } else if (!left.length) {
-    html = `<div class="empty">${past.length
-      ? "That's your whole day. Nothing left."
-      : "Nothing scheduled today."}</div>`;
-  }
-  if (past.length) {
-    html += `<button class="earlier" id="earlier">${showEarlier
-      ? "Hide" : `${past.length} earlier`}</button>`;
-    if (showEarlier) html += past.map((e) => entryHTML(e, false)).join("");
+    html = `<div class="note-day"><b>${esc(off)}</b><span>No classes. Reading break runs Fri 9 &ndash; Wed 14 Oct.</span></div>`
+         + nextClassRow(day);
+  } else {
+    if (DAY_OVERRIDE[day]) {
+      html += `<div class="note-day amb"><b>${esc(DAY_OVERRIDE[day])} timetable today.</b></div>`;
+    }
+    html += left.map((e, i) => entryHTML(e, i === nextI)).join("");
+    if (!left.length) {
+      html += `<div class="note-day"><b>${past.length
+        ? "Done for today." : "Nothing scheduled."}</b></div>` + nextClassRow(day);
+    }
+    if (past.length) {
+      html += `<button class="earlier" id="earlier">${showEarlier
+        ? "Hide" : `${past.length} earlier`}</button>`;
+      if (showEarlier) html += past.map((e) => entryHTML(e, false)).join("");
+    }
   }
   host.innerHTML = html;
+  renderDayStrip(day);
 
   const rows = rowsOn(today);
   paintNext(rows, rows.findIndex((r) => toMin(r[1]) >= n), n);
@@ -684,46 +769,118 @@ function cardRow(c) {
 /* Deadlines straight from the syllabi. "Due soon" used to read only from the
    cards table, so it said "nothing due" on the same screen where the course
    list said an assignment was due in 8 days. */
-function syllabusDue(withinDays) {
+/* Everything with a date on it, from all three places it can come from.
+ *
+ * Syllabi are authoritative for wording, the calendar for times, and cards for
+ * anything the agent found that no syllabus knows about. They overlap heavily,
+ * so a collision MERGES rather than drops - losing "moved earlier in syllabus
+ * v4" because the calendar row happened to be seen first would be a real
+ * regression.
+ *
+ * `back` is how many days of already-passed deadlines to keep. Syllabus dates
+ * can never be ticked off, so an unbounded overdue list turns into permanent
+ * clutter within a month and he stops looking at the screen at all. */
+function allDue(back = 7) {
+  const norm = (s) => String(s || "").toLowerCase()
+    .replace(/^[a-z]{4}\s*\d{3}\s*[-:]?\s*/, "")     // drop a leading course code
+    .replace(/[^a-z0-9]/g, "");
   const out = [];
-  const seen = new Set();
-  const key = (iso, what) => iso + "|" + what.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  for (const [code, c] of Object.entries(COURSES)) {
-    for (const d of c.dates || []) {
-      const away = daysUntil(d[0]);
-      if (away < 0 || away > withinDays) continue;
-      seen.add(key(d[0], d[1]));
-      out.push({ code, iso: d[0], what: d[1], note: d[2], away });
-    }
-  }
-  // Deadlines the routine mirrored in from the calendar. Deduped against the
-  // syllabi, which describe most of the same dates in slightly different words.
+  const add = (item) => {
+    const k = norm(item.what);
+    const hit = out.find((o) => o.iso === item.iso &&
+      (norm(o.what) === k || norm(o.what).startsWith(k) || k.startsWith(norm(o.what))));
+    if (!hit) { out.push(item); return; }
+    // Keep the earlier (higher-precedence) wording, adopt whatever it lacks.
+    for (const f of ["note", "time", "url", "code"]) if (!hit[f] && item[f]) hit[f] = item[f];
+  };
+
+  for (const [code, c] of Object.entries(COURSES))
+    for (const d of c.dates || [])
+      add({ iso: d[0], code, what: d[1], note: d[2], away: daysUntil(d[0]) });
+
   for (const a of agenda) {
     if (a.kind === "class") continue;
-    const away = daysUntil(a.day);
-    if (away < 0 || away > withinDays || seen.has(key(a.day, a.title))) continue;
-    seen.add(key(a.day, a.title));
-    out.push({ code: a.course || "", iso: a.day, what: a.title, note: a.note, away });
+    add({ iso: a.day, code: a.course || "", what: a.title, note: a.note,
+          time: a.starts_at ? (a.ends_at ? `${hhmm(a.starts_at)}–${hhmm(a.ends_at)}`
+                                         : hhmm(a.starts_at)) : "",
+          away: daysUntil(a.day) });
   }
-  return out.sort((a, b) => a.away - b.away || a.what.localeCompare(b.what));
+
+  // Only DATED school cards. An undated one is a task, not a deadline, and
+  // belongs on Tasks where it can actually be ticked off.
+  for (const c of cards)
+    if (c.section === "school" && c.due)
+      add({ iso: c.due, code: "", what: c.title.replace(/^needs you:\s*/i, ""),
+            note: c.body, url: c.url, away: daysUntil(c.due) });
+
+  return out
+    .filter((d) => d.away >= -back)
+    .sort((a, b) => a.away - b.away || String(a.what).localeCompare(String(b.what)));
 }
 
+// Kept for the Desk, which only ever asks "how much is coming up".
+const syllabusDue = (withinDays) => allDue(0).filter((d) => d.away <= withinDays);
+
+/* ONE row shape for everything in Due, whatever it came from. Nothing here is
+   tickable: tick boxes live on Tasks and only on Tasks. Mixing read-only rows
+   and tickable rows under one heading is the exact thing he complained about. */
 function dueRow(d) {
   const c = COURSES[d.code];
-  const urgent = d.away <= 3;
-  // Only a row that leads somewhere gets the affordance. Calendar deadlines
-  // with no course attached used to look tappable and do nothing.
-  return `<div class="due-row${urgent ? " urgent" : ""}${c ? " tappable" : ""}"${
+  const m = markFor(d.what);
+  const exam = m.cls === "exam";
+  const late = d.away < 0;
+  const urgent = late || d.away <= 3;
+  const when = late ? `${-d.away}d late`
+    : d.away === 0 ? "today" : d.away === 1 ? "tomorrow" : `${d.away}d`;
+  const meta = [d.time, d.note].filter(Boolean).join(" · ");
+
+  return `<div class="due-row${urgent ? " urgent" : ""}${exam ? " exam" : ""}${c ? " tappable" : ""}"${
       c ? ` data-course="${esc(d.code)}"` : ""} style="--c:${c ? c.colour : "var(--dim)"}">
-    <span class="due-when"><b>${d.away === 0 ? "today" : d.away === 1 ? "tomorrow" : d.away + "d"}</b></span>
+    <span class="due-when"><b>${when}</b></span>
     <span class="due-body">
-      ${d.code ? `<span class="due-code">${esc(d.code)}</span>` : ""}
+      <span class="due-code">${esc(d.code || "University")}${
+        m.g !== "-" ? `<i class="mark ${m.cls}" title="${esc(m.label)}">${m.g}</i>` : ""}</span>
       <span class="due-what">${esc(d.what)}</span>
-      ${d.note ? `<span class="due-note">${esc(d.note)}</span>` : ""}
+      ${meta ? `<span class="due-note">${esc(meta)}</span>` : ""}
     </span>
     ${c ? '<span class="act-go" aria-hidden="true">&rsaquo;</span>' : ""}
   </div>`;
+}
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+                "August", "September", "October", "November", "December"];
+
+/* Grouped by time, never by course. Grouping by course would mean scanning
+   five lists to answer the only question this screen exists for. Headings
+   render only when they have something under them. */
+function renderDue() {
+  const all = allDue(7);
+  const groups = [
+    ["Overdue",     (d) => d.away < 0],
+    ["Today",       (d) => d.away === 0],
+    ["Tomorrow",    (d) => d.away === 1],
+    ["Next 7 days", (d) => d.away > 1 && d.away <= 7],
+  ];
+  let html = "";
+  const used = new Set();
+  for (const [name, test] of groups) {
+    const rows = all.filter((d) => !used.has(d) && test(d));
+    rows.forEach((d) => used.add(d));
+    if (rows.length) html += `<h3 class="eyebrow">${name}</h3>` + rows.map(dueRow).join("");
+  }
+  // Everything past the first week gets a month heading - one word each, and
+  // together they give him the shape of the term, which is what "show me all
+  // the assignments" actually means.
+  let month = "";
+  for (const d of all.filter((x) => !used.has(x))) {
+    const mth = MONTHS[+d.iso.slice(5, 7) - 1];
+    if (mth !== month) { month = mth; html += `<h3 class="eyebrow">${mth}</h3>`; }
+    html += dueRow(d);
+  }
+  fill("school-cards", html, "<b>Nothing due.</b> Nothing left on any syllabus.");
+  const soon = all.filter((d) => d.away >= 0 && d.away <= 7).length;
+  $("seg-due-n").textContent = soon || "";
 }
 
 /* One tap used to tick off a whole column of tasks.
@@ -788,45 +945,6 @@ function nextFor(code) {
     .filter((d) => d.away >= 0)
     .sort((a, b) => a.away - b.away);
   return ds[0] || null;
-}
-
-function renderCourses() {
-  const n = nowMin();
-  const todayRows = rowsOn(todayISO());
-
-  // Courses meeting today, soonest first; everything else after.
-  const list = Object.entries(COURSES).map(([code, c]) => {
-    const mine = todayRows.filter((r) => codeOf(r[3]) === code);
-    const slot = mine.filter((r) => toMin(r[2]) >= n)[0] || mine[0] || null;
-    return { code, c, mine, slot, sort: mine.length ? (slot ? toMin(slot[1]) : 0) : 99999 };
-  }).sort((a, b) => a.sort - b.sort);
-
-  fill("courses", list.map(({ code, c, mine, slot }) => {
-    const live = slot && toMin(slot[1]) <= n && n <= toMin(slot[2]);
-    const nx = nextFor(code);
-    const urgent = nx && nx.away <= 7;
-
-    // Never leave time and room blank. If the course does not meet today,
-    // fall back to its usual slot rather than showing nothing at all.
-    const when = slot
-      ? `<b>${slot[1]}-${slot[2]}</b> &middot; <b>${esc(slot[4])}</b>`
-      : `${esc(c.when[0][0])} <b>${esc(c.when[0][1])}</b> &middot; <b>${esc(c.when[0][2])}</b>`;
-
-    return `<button class="course${mine.length ? " istoday" : ""}"
-        data-course="${esc(code)}" style="--c:${c.colour}">
-      <span class="course-bar"></span>
-      <span class="course-body">
-        <span class="course-code">${esc(code)}${
-          live ? '<i class="today-dot">now</i>'
-          : mine.length ? '<i class="today-dot">today</i>' : ""}</span>
-        <span class="course-name">${esc(c.name)}</span>
-        <span class="course-when">${when}</span>
-        ${nx ? `<span class="course-next${urgent ? " hot" : ""}">${esc(nx.what)} &middot; <b>${
-          nx.away === 0 ? "today" : nx.away === 1 ? "tomorrow" : `${nx.away} days`}</b></span>` : ""}
-      </span>
-      <span class="act-go" aria-hidden="true">&rsaquo;</span>
-    </button>`;
-  }).join(""), "No courses.");
 }
 
 function openCourse(code) {
@@ -922,15 +1040,19 @@ function openCourse(code) {
 
 /* Tapping a class in Today opens THIS session - what you'll be doing in that
    room, in that hour - not the whole syllabus. The syllabus is one tap further. */
-function openSession(code, idx) {
+/* Takes the DATE as well as the index. It used to index into today's rows no
+   matter which day the row came from, which was harmless while only today was
+   ever on screen - and wrong the moment the day strip let him tap Monday's
+   class on a Wednesday. */
+function openSession(code, day, idx) {
   const c = COURSES[code];
-  const r = rowsOn(todayISO())[idx];
+  const r = rowsOn(day)[idx];
   if (!c || !r) return;
 
-  const day = todayISO();
   const n = nowMin();
-  const live = toMin(r[1]) <= n && n <= toMin(r[2]);
-  const gone = toMin(r[2]) < n;
+  const isToday = day === todayISO();
+  const live = isToday && toMin(r[1]) <= n && n <= toMin(r[2]);
+  const gone = isToday && toMin(r[2]) < n;
   const topic = topicFor(code, day);
   const attached = forCourse(code, 14);
   const now = attached.filter((d) => d.away <= 2);
@@ -948,7 +1070,8 @@ function openSession(code, idx) {
       </div>
     </div>
 
-    <h3 class="eyebrow">Today's class</h3>
+    <h3 class="eyebrow">${isToday ? "Today's class"
+      : `${weekdayOf(day)} ${+day.slice(8)}/${+day.slice(5, 7)}`}</h3>
     <div class="stack">
       ${topic ? `<div class="topic">${esc(topic)}</div>`
               : `<div class="empty">No topic published for this session. ${
@@ -983,7 +1106,6 @@ function closeCourse() {
 
 function render() {
   renderToday();
-  renderCourses();
 
   /* Inbox -- newest first. Group headers cost more room than they save until
      there are a lot of rows, so they only appear past a threshold. Never
@@ -1028,70 +1150,28 @@ function render() {
      tell which was which. Everything you act on is here; Due soon is a list of
      dates you read. The catch-all still matters: a card with section 'else' is
      legal in the schema and used to render on no screen at all. */
-  const tasks = cards.filter((c) => c.section !== "internships");
+  /* Tasks is things you DO. A dated school deadline is not one of those - it
+     is a fact about the term, and it lives in School > Due. What stays here is
+     everything undated plus anything that is not school or internships, which
+     also catches section 'else' - legal in the schema and previously rendered
+     on no screen at all. */
+  const tasks = cards.filter((c) =>
+    c.section !== "internships" && !(c.section === "school" && c.due));
   fill("tasks", tasks.map(cardRow).join(""),
     "Nothing needs you right now. Anything I can't finish myself lands here.");
   $("dot-tasks").hidden = tasks.length === 0;
 
-  /* Due soon reads the syllabi and the calendar. Reading only cards is why
-     this said "nothing due" on the same screen the course list said an
-     assignment was due in 8 days. */
-  fill("school-cards", syllabusDue(21).map(dueRow).join(""),
-    "Nothing due in the next three weeks.");
-  fill("work-cards", cards.filter((c) => c.section === "internships").map(cardRow).join(""),
-    "Nothing yet. Ask me to look for internships and they'll land here.");
+  renderDue();
+  renderChips();
 
-  /* School used to open with a headline, a vague subtitle and then four
-     headings before it said anything. It now answers the two questions the
-     screen exists for, in one line each: where do I go next, and what is the
-     next thing actually due. */
-  const nOfDay = nowMin();
-  let nextClass = null;
-  for (let step = 0; step <= 16 && !nextClass; step++) {
-    const iso = isoPlus(todayISO(), step);
-    const r = rowsOn(iso)
-      .sort((a, b) => toMin(a[1]) - toMin(b[1]))
-      .find((row) => step > 0 || toMin(row[2]) >= nOfDay);
-    if (r) nextClass = { r, iso, step, live: step === 0 && toMin(r[1]) <= nOfDay };
-  }
-  const nextDue = syllabusDue(60)[0];
-  const when = (iso, step) => step === 0 ? "today" : step === 1 ? "tomorrow" : weekdayOf(iso);
-
-  $("school-next").innerHTML = [
-    nextClass ? `<div class="snap">
-        <span class="snap-k">${nextClass.live ? "In class" : "Next class"}</span>
-        <span class="snap-v">${esc(nextClass.r[3])}</span>
-        <span class="snap-d"><b>${nextClass.live ? `until ${nextClass.r[2]}`
-          : `${when(nextClass.iso, nextClass.step)} ${nextClass.r[1]}`}</b> &middot; ${
-          esc(PLACES[nextClass.r[4]] || nextClass.r[4])}</span>
-      </div>` : "",
-    nextDue ? `<div class="snap due"${COURSES[nextDue.code] ? ` data-course="${esc(nextDue.code)}"` : ""}>
-        <span class="snap-k">Next due</span>
-        <span class="snap-v">${esc(nextDue.what)}</span>
-        <span class="snap-d"><b>${nextDue.away === 0 ? "today"
-          : nextDue.away === 1 ? "tomorrow" : `in ${nextDue.away} days`}</b>${
-          nextDue.code ? ` &middot; ${esc(nextDue.code)}` : ""}</span>
-      </div>` : "",
-  ].join("") || `<div class="empty">Nothing scheduled.</div>`;
-
-  /* THIS week, by date - not a generic Mon-Fri template. It used to print the
-     timetable regardless of the calendar, so reading break looked like an
-     ordinary week. */
-  const wd = DAYS.indexOf(weekdayOf(todayISO()));
-  const monday = isoPlus(todayISO(), wd === 0 ? 1 : 1 - wd);
-  $("week").innerHTML = [0, 1, 2, 3, 4].map((i) => {
-    const iso = isoPlus(monday, i);
-    const off = NO_CLASS[iso];
-    const rows = rowsOn(iso);
-    const head = `${weekdayOf(iso)} <em>${+iso.slice(8)}/${+iso.slice(5, 7)}</em>`;
-    const body = off
-      ? `<div class="dayrow off"><span>&mdash;</span><span>${esc(off)}</span></div>`
-      : rows.map((r) =>
-          `<div class="dayrow"><span>${r[1]}</span><span>${esc(r[3])}<em>${esc(r[4])}</em></span></div>`
-        ).join("") || `<div class="dayrow off"><span>&mdash;</span><span>No classes</span></div>`;
-    return `<div class="daycard${iso === todayISO() ? " istoday" : ""}"><h4>${head}${
-      DAY_OVERRIDE[iso] ? ` <i>runs ${esc(DAY_OVERRIDE[iso])}</i>` : ""}</h4>${body}</div>`;
-  }).join("");
+  /* Work. Once the internship agent is running this fills itself; until then
+     it says so rather than looking broken. */
+  const jobs = cards.filter((c) => c.section === "internships");
+  fill("work-cards", jobs.map(cardRow).join(""),
+    "Nothing yet. Ask me to go looking for internships and they'll land here.");
+  $("work-sub").textContent = jobs.length
+    ? `${jobs.length} open${jobs.length === 1 ? "" : "s"} worth a look`
+    : "Internships and applications.";
 
   /* Honest sync state on the Desk. Never show nothing when something is wrong. */
   const s = $("sync");
@@ -1255,8 +1335,26 @@ $("filter").addEventListener("click", (e) => {
   render();
 });
 
+// Classes / Due. Selection deliberately does NOT persist - opening School
+// always lands on Classes, because predictable beats clever.
+function setSeg(seg) {
+  schoolSeg = seg;
+  $("v-classes").hidden = seg !== "classes";
+  $("v-due").hidden = seg !== "due";
+  for (const b of document.querySelectorAll(".seg-b"))
+    b.setAttribute("aria-selected", String(b.dataset.seg === seg));
+}
+
 document.addEventListener("click", (e) => {
   if (e.target.closest("#earlier")) { showEarlier = !showEarlier; renderToday(); return; }
+
+  const seg = e.target.closest(".seg-b");
+  if (seg) { setSeg(seg.dataset.seg); return; }
+
+  // Day pill, or the "back to class" pointer row - both just move the strip.
+  const day = e.target.closest("[data-day]");
+  if (day) { schoolDay = day.dataset.day; showEarlier = false; renderToday(); return; }
+
   const tick = e.target.closest(".tick");
   if (tick) {
     const card = tick.closest("[data-card]");
@@ -1265,8 +1363,8 @@ document.addEventListener("click", (e) => {
   }
   const sess = e.target.closest("[data-session]");
   if (sess) {
-    const [code, idx] = sess.dataset.session.split("|");
-    openSession(code, +idx);
+    const [code, iso, idx] = sess.dataset.session.split("|");
+    openSession(code, iso, +idx);
     return;
   }
   const course = e.target.closest("[data-course]");
@@ -1282,16 +1380,19 @@ $("inbox").addEventListener("click", (e) => {
 });
 
 const PANELS = ["desk", "tasks", "inbox", "school", "work"];
-document.querySelectorAll(".tabs button").forEach((b) => {
-  b.addEventListener("click", () => {
-    const want = b.dataset.panel;
-    document.querySelectorAll(".tabs button").forEach((o) =>
-      o.setAttribute("aria-selected", String(o.dataset.panel === want)));
-    closeCourse();          // tapping School must land on School, not the last course
-    PANELS.forEach((p) => { $("p-" + p).hidden = p !== want; });
-    scrollTo({ top: 0 });
-  });
-});
+function showPanel(want) {
+  document.querySelectorAll(".tabs button").forEach((o) =>
+    o.setAttribute("aria-selected", String(o.dataset.panel === want)));
+  closeCourse();            // tapping School must land on School, not the last course
+  if (want === "school") { setSeg("classes"); schoolDay = null; showEarlier = false; renderToday(); }
+  PANELS.forEach((p) => { $("p-" + p).hidden = p !== want; });
+  scrollTo({ top: 0 });
+}
+document.querySelectorAll(".tabs button").forEach((b) =>
+  b.addEventListener("click", () => showPanel(b.dataset.panel)));
+
+// The Log lost its place in the tab bar; this is how it is reached now.
+$("golog").addEventListener("click", () => showPanel("inbox"));
 
 /* Round-trip test: write a row, read it back, delete it. Proves the whole
    connection without waiting on the routine, and names the exact failure. */
