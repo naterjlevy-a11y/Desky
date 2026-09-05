@@ -1,520 +1,396 @@
-/* Desk — dark, committed. Used at night, walking, one-handed. */
+/* Desky — a departure board for a term.
+ *
+ * The subject is a timetable, so the page is built like one: time in a gutter
+ * down the left, hairline rules between rows, alignment doing the work boxes
+ * used to do. Everything is quiet except the one thing that is next, which is
+ * the only filled block on the screen.
+ *
+ * What was taken out, and why:
+ *   - Every label was UPPERCASE and letter-spaced. Fourteen of them on one
+ *     screen, none of them carrying information.
+ *   - Every element was a rounded card with the same radius and border, so
+ *     nothing looked more important than anything else.
+ *   - Meta was chained with middle dots: "Lecture · Trottier 2110 · 16:05".
+ *     Position says the same thing without the punctuation.
+ *   - Panels faded and slid up on every single tab change.
+ *   - There was no desktop layout at all.
+ */
 
 :root{
-  --bg:#0E0D0B;
-  --raise:#191713;
-  --sunk:#221F19;
-  --edge:#2E2A22;
-  --edge-lit:#3D372C;
-  --ink:#F2EEE5;
-  --dim:#9A9488;
-  /* Was #6A655B, which measured 3.1:1 against --raise: under the 4.5:1 needed
-     for small text, and this token carries the whole metadata layer - rooms,
-     times, day counts. Unreadable outdoors, which is exactly when it is read. */
-  --faint:#8B8578;
-  --hot:#E0755C;
-  --hot-deep:#B03D26;
-  --ok:#79B79B;
-  --amb:#D9A548;
-  /* Non-class calendar rows. .slot.other referenced this and it was never
-     declared, so those rows silently kept the default grey edge. */
+  /* Three surfaces, not five: ground, one raised plane, one line. */
+  --bg:#100E0B;
+  --up:#191612;
+  --line:#2C2721;
+  --line-lit:#3E3830;
+
+  --ink:#EFEAE0;
+  --dim:#A29A8C;
+  --faint:#847C6F;        /* carries rooms, times, counts - keep above 4.5:1 */
+
+  /* Amber on near-black, the way a board reads. The previous accent was
+     #E0755C, a hair from the terracotta every generated page reaches for. */
+  --amber:#E9A23B;
+  --red:#D2453C;          /* only ever means overdue or exam */
+  --green:#7FB08A;
   --cool:#7FA8C4;
-  /* One family for everything readable. Mono was carrying rooms, labels,
-     eyebrows and course codes, and mono at 10-12px is genuinely hard to read -
-     that was the "terrible font". Mono is now only for digits, where lining up
-     is worth something. */
+
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text",
          "Segoe UI",system-ui,"Helvetica Neue",sans-serif;
-  --mono:ui-monospace,"SF Mono","Segoe UI Mono",Menlo,Consolas,monospace;
-  --num:"SF Pro Text",-apple-system,"Segoe UI",system-ui,sans-serif;
+
+  /* One scale, used everywhere. */
+  --t-room:20px;          /* the thing you are walking to */
+  --t-lead:17px;
+  --t-body:15px;
+  --t-meta:13.5px;
+  --t-small:12px;
+
+  --gutter:52px;          /* the time column */
   --sb:env(safe-area-inset-bottom,0px);
   --st:env(safe-area-inset-top,0px);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-/* Kills the 300ms tap delay and the synthetic click that came with it - the
-   ghost click was what let one tap tick off several tasks in a row. */
-button,a,[role=tab],.tick,.card,.slot,.course,.due-row{touch-action:manipulation}
+/* Kills the 300ms tap delay and the ghost click that let one tap tick off a
+   whole column of tasks. */
+button,a,[role=tab],.tick,.slot,.due-row,.day,.chip-c{touch-action:manipulation}
 html,body{height:100%}
 body{
   margin:0;background:var(--bg);color:var(--ink);
-  font-family:var(--sans);font-size:16px;line-height:1.5;
+  font-family:var(--sans);font-size:var(--t-body);line-height:1.5;
   -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
+  font-variant-numeric:tabular-nums;    /* every time and date lines up */
 }
 [hidden]{display:none !important}
-button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
-:focus-visible{outline:2px solid var(--hot);outline-offset:3px;border-radius:4px}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit;text-align:left}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
 
 /* ── sign in ───────────────────────────────────────────── */
 .gate{min-height:100dvh;display:grid;place-items:center;padding:28px 22px}
-.gate-inner{width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px}
+.gate-inner{width:100%;max-width:330px;display:flex;flex-direction:column;gap:14px}
 .mark{
-  width:56px;height:56px;border-radius:14px;
-  background:linear-gradient(152deg,var(--hot),var(--hot-deep));
-  position:relative;margin-bottom:8px;
+  width:44px;height:30px;border-radius:2px;background:var(--amber);
+  position:relative;margin-bottom:10px;
 }
 .mark::after{
-  content:"";position:absolute;left:12px;right:12px;bottom:16px;height:3px;
-  background:var(--bg);border-radius:2px;box-shadow:0 -9px 0 var(--bg);
+  content:"";position:absolute;left:7px;right:7px;top:9px;height:2px;
+  background:var(--bg);box-shadow:0 6px 0 var(--bg);
 }
-/* Was mono. It is the first thing on screen and mono was the whole complaint. */
-.gate h1{font-size:34px;letter-spacing:-.035em;font-weight:680;margin:0}
-.gate-sub{margin:0 0 14px;color:var(--dim);font-size:15px}
+.gate h1{font-size:30px;letter-spacing:-.02em;font-weight:600;margin:0}
+.gate-sub{margin:0 0 14px;color:var(--dim);font-size:var(--t-meta)}
 .gate-form{display:flex;flex-direction:column;gap:12px}
-.field{display:flex;flex-direction:column;gap:7px}
-.field span{font-size:11px;letter-spacing:.06em;font-weight:600;text-transform:uppercase;color:var(--faint)}
-input[type=email]{
-  font:inherit;font-size:16px;padding:15px;background:var(--raise);color:var(--ink);
-  border:1px solid var(--edge);border-radius:12px;width:100%;
+.field{display:flex;flex-direction:column;gap:6px}
+.field span{font-size:var(--t-small);color:var(--faint)}
+input[type=email],input[type=password]{
+  font:inherit;font-size:16px;padding:12px 0;background:none;color:var(--ink);
+  border:0;border-bottom:1px solid var(--line-lit);border-radius:0;width:100%;
 }
-input[type=email]::placeholder{color:var(--faint)}
-.gate-msg{margin:2px 0 0;font-size:14px;color:var(--dim);min-height:1.4em}
-.gate-msg.bad{color:var(--hot)}
-.gate-msg.good{color:var(--ok)}
-.btn-primary{background:var(--hot-deep);color:#fff;font-weight:600;font-size:16px;padding:16px;border-radius:12px;width:100%}
-.btn-primary:disabled{opacity:.5}
+input[type=email]:focus,input[type=password]:focus{outline:none;border-bottom-color:var(--amber)}
+input::placeholder{color:var(--faint)}
+.gate-msg{margin:2px 0 0;font-size:var(--t-meta);color:var(--dim);min-height:1.4em}
+.gate-msg.bad{color:var(--red)}
+.gate-msg.good{color:var(--green)}
+.btn-primary{
+  background:var(--amber);color:#191612;font-weight:650;font-size:16px;
+  padding:14px;border-radius:3px;width:100%;text-align:center;
+}
+.btn-primary:disabled{opacity:.45}
+.gate-alts{display:flex;justify-content:space-between;gap:14px;padding:2px 0 0}
 
 /* ── frame ─────────────────────────────────────────────── */
-.app{min-height:100dvh;padding-top:var(--st);padding-bottom:calc(66px + var(--sb))}
-.panel{padding:14px 18px 10px;display:flex;flex-direction:column;gap:16px;animation:rise .22s ease-out}
-@keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.app{min-height:100dvh;padding-top:var(--st);padding-bottom:calc(58px + var(--sb))}
+.panel{padding:12px 18px 24px;display:flex;flex-direction:column;gap:14px}
+.ph{font-size:22px;letter-spacing:-.015em;margin:2px 0 0;font-weight:600}
+.psub{margin:-8px 0 0;color:var(--dim);font-size:var(--t-meta)}
 
-.ph{font-size:27px;letter-spacing:-.03em;margin:6px 0 0;font-weight:650;text-wrap:balance}
-.psub{margin:-10px 0 0;color:var(--dim);font-size:14px}
-/* Quiet. The accent is reserved for things that are urgent or tappable -
-   four orange headings on one screen were competing with real urgency. */
+/* Sentence case on a rule. These were uppercase and tracked out, which made
+   four of them shout at each other on one screen. */
 .eyebrow{
-  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--faint);margin:8px 0 -6px;padding-bottom:9px;
-  border-bottom:1px solid var(--edge);font-weight:500;
+  font-size:var(--t-small);color:var(--faint);font-weight:600;
+  margin:14px 0 0;padding-bottom:5px;border-bottom:1px solid var(--line);
 }
-.stack{display:flex;flex-direction:column;gap:9px}
+.stack{display:flex;flex-direction:column}
 
-/* ── the desk hero ─────────────────────────────────────── */
-.hero{display:flex;flex-direction:column;gap:13px;padding-top:4px}
-.hero-top{display:flex;justify-content:space-between;align-items:center}
-.clock{font-size:12px;letter-spacing:.02em;text-transform:uppercase;color:var(--faint)}
-/* Padding, not size: these were 12.5px text with no box around them, which is
-   a long way under a thumb-sized target. */
-.linkish{font-size:12.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--faint);padding:8px 2px}
-.linkish:hover{color:var(--hot)}
-.hero-h{font-size:40px;letter-spacing:-.055em;margin:0;line-height:.95;font-weight:600}
+/* ── the desk ──────────────────────────────────────────── */
+.hero{display:flex;flex-direction:column;gap:12px;padding-top:2px}
+.hero-top{display:flex;justify-content:space-between;align-items:baseline}
+.clock{font-size:var(--t-small);color:var(--faint)}
+.linkish{font-size:var(--t-small);color:var(--faint);padding:7px 0}
+.linkish:hover{color:var(--amber)}
+
+/* THE one filled block. Everything else on the screen is type on the ground,
+   so this reads instantly without having to be loud. */
+.next-wrap{
+  display:grid;gap:1px;padding:15px 17px 16px;
+  background:var(--up);border-left:3px solid var(--amber);border-radius:2px;
+}
+.next-lbl{font-size:var(--t-small);color:var(--amber);font-weight:600}
+.next-val{font-size:var(--t-lead);font-weight:600;color:var(--dim);margin-top:4px}
+.next-det{font-size:var(--t-room);color:var(--ink);font-weight:650;letter-spacing:-.015em;line-height:1.25;margin-top:1px}
+.next-det b{font-weight:650}
+.next-room{display:none}
 
 .say-wrap{
-  display:flex;gap:10px;align-items:flex-end;
-  background:var(--raise);border:1px solid var(--edge);border-radius:17px;
-  padding:9px 9px 9px 16px;transition:border-color .15s;
+  display:flex;gap:8px;align-items:flex-end;
+  border-bottom:1px solid var(--line-lit);padding:0 0 6px;transition:border-color .15s;
 }
-.say-wrap:focus-within{border-color:var(--hot)}
+.say-wrap:focus-within{border-bottom-color:var(--amber)}
 #say{
-  flex:1;min-width:0;font:inherit;font-size:17px;line-height:1.45;
-  background:none;border:0;color:var(--ink);resize:none;padding:11px 0;max-height:38vh;
+  flex:1;min-width:0;font:inherit;font-size:16px;line-height:1.45;
+  background:none;border:0;color:var(--ink);resize:none;padding:10px 0;max-height:38vh;
 }
 #say::placeholder{color:var(--faint)}
 #say:focus{outline:none}
 .say-go{
-  flex:none;width:46px;height:46px;border-radius:13px;
-  background:var(--hot-deep);color:#fff;display:grid;place-items:center;
-  transition:transform .12s;
+  flex:none;width:38px;height:38px;border-radius:2px;background:var(--amber);
+  color:#191612;display:grid;place-items:center;transition:opacity .12s;
 }
-.say-go:active{transform:scale(.94)}
-.say-go:disabled{opacity:.4}
-.say-hint{margin:0 4px;font-size:12px;letter-spacing:0;color:var(--faint);min-height:1.3em}
-.say-hint.saved{color:var(--ok)}
+.say-go:active{opacity:.7}
+.say-go:disabled{opacity:.35}
+.say-hint{margin:0;font-size:var(--t-small);color:var(--faint);min-height:1.3em}
+.say-hint.saved{color:var(--green)}
+.inflight{margin:0;font-size:var(--t-small);color:var(--amber)}
+.inflight.ok{color:var(--green)}
 
-/* ── the two action rows ───────────────────────────────── */
-.actions{display:flex;flex-direction:column;gap:9px}
+.actions{display:flex;flex-direction:column}
 .act{
-  display:grid;grid-template-columns:40px 1fr 14px;gap:13px;align-items:center;
-  padding:14px 15px;background:var(--raise);
-  border:1px solid var(--edge);border-radius:14px;text-align:left;
-  transition:border-color .15s,transform .12s;
+  display:grid;grid-template-columns:22px 1fr;gap:13px;align-items:center;
+  padding:13px 0;border-bottom:1px solid var(--line);
 }
-.act:active{transform:scale(.985)}
-.act:hover{border-color:var(--edge-lit)}
-.act[disabled]{opacity:.55}
-.act-ico{
-  width:40px;height:40px;border-radius:11px;background:var(--sunk);
-  display:grid;place-items:center;color:var(--hot);
-}
-.act-ico svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.act-body{display:flex;flex-direction:column;gap:2px;min-width:0}
-.act-t{font-size:15.5px;font-weight:600}
-.act-s{font-size:13px;color:var(--dim);overflow-wrap:anywhere}
-.act-go{color:var(--faint);font-size:19px;line-height:1}
+.act[disabled]{opacity:.45}
+.act-ico{color:var(--faint);display:grid;place-items:center}
+.act-ico svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.act:hover .act-ico{color:var(--amber)}
+.act-body{display:flex;flex-direction:column;gap:1px;min-width:0}
+.act-t{font-size:var(--t-body);font-weight:600}
+.act-s{font-size:var(--t-meta);color:var(--faint);overflow-wrap:anywhere}
+.act-go{display:none}        /* the row is the target; the chevron was noise */
 
-/* WHAT it is comes first, then when and where. The room used to be 30px above
-   a 15px course name, so "ARTS 110" read as the name of the class. */
-.next-wrap{
-  display:grid;grid-template-areas:"lbl" "val" "det";
-  gap:1px;padding:15px 17px 16px;background:var(--raise);
-  border:1px solid var(--edge);border-left:4px solid var(--c,var(--hot));border-radius:15px;
-}
-.next-lbl{
-  grid-area:lbl;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--c,var(--hot));font-weight:700;margin-bottom:3px;
-}
-.next-val{
-  grid-area:val;font-size:23px;line-height:1.15;font-weight:650;
-  letter-spacing:-.02em;color:var(--ink);
-}
-.next-det{
-  grid-area:det;font-size:15px;color:var(--dim);font-weight:500;margin-top:4px;
-}
-.next-det b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
-.next-room{display:none}
+.sync{margin:0;font-size:var(--t-small);color:var(--faint);overflow-wrap:anywhere}
+.sync.bad{color:var(--amber)}
+.sync.good{color:var(--green)}
+.loglink{position:relative;padding-right:12px;align-self:flex-start}
+.deskfoot{display:flex;gap:18px;padding:2px 0 0}
+.deskfoot button:disabled{opacity:.5}
 
-.inflight{
-  margin:0 4px;font-size:11px;letter-spacing:.08em;
-  color:var(--amb);
-}
-.inflight.ok{color:var(--ok)}
-
-/* ── cards ─────────────────────────────────────────────── */
+/* ── rows: the board ───────────────────────────────────── */
+/* Time in the gutter, content beside it, a hairline between. No boxes. */
 .slot{
-  display:grid;grid-template-columns:58px 1fr;gap:13px;padding:13px 15px;
-  background:var(--raise);border:1px solid var(--edge);
-  border-left:3px solid var(--edge);border-radius:13px;
-  transition:border-color .15s,transform .12s;
+  display:grid;grid-template-columns:var(--gutter) 1fr;gap:14px;
+  padding:13px 0;border-bottom:1px solid var(--line);
+  border-left:2px solid transparent;
 }
-.slot[data-course]{grid-template-columns:58px 1fr 14px;cursor:pointer}
-.slot[data-course]:active{transform:scale(.985)}
-.slot[data-course]:hover{border-color:var(--c)}
-.slot.now{border-left-color:var(--hot)}
-.slot.live{border-left-color:var(--c,var(--hot));background:var(--sunk);border-color:var(--c)}
-.slot.gone{opacity:.38}
-/* Times were 11px mono. tabular-nums lines the digits up just as well in the
-   sans face and reads far better at this size. */
-.slot-t{font-family:var(--num);font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;padding-top:3px;line-height:1.45;letter-spacing:-.01em}
-.slot-t b{color:var(--ink);font-size:14px;font-weight:650}
-.slot-n{font-weight:600;font-size:15.5px;letter-spacing:-.01em}
-.slot-r{font-size:13.5px;color:var(--faint);margin-top:3px}
-.slot-r b{color:var(--dim);font-weight:600;letter-spacing:.03em}
-.slot-due{font-size:12.5px;color:var(--faint);margin-top:5px}
-.slot-due b{color:var(--amb)}
-/* A glance-level marker on a class row: ! exam, * big graded event, ^ due. */
-.mark{
-  font-style:normal;font-family:var(--mono);font-weight:700;font-size:12px;
-  display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;
-  margin-left:8px;vertical-align:1px;background:var(--sunk);color:var(--dim);
-}
-.mark.exam{background:var(--hot-deep);color:#fff}
-.mark.big{background:var(--amb);color:var(--bg)}
-.mark.due{background:var(--sunk);color:var(--amb);box-shadow:inset 0 0 0 1px var(--amb)}
+.slot[data-session],.slot.ahead{cursor:pointer}
+.slot.now{border-left-color:var(--amber);padding-left:12px}
+.slot.live{border-left-color:var(--amber);padding-left:12px;background:var(--up)}
+.slot.gone{opacity:.4}
+.slot.other{border-left-color:var(--cool);padding-left:12px}
+.slot-t{font-size:var(--t-meta);color:var(--faint);line-height:1.35;padding-top:2px}
+.slot-t b{color:var(--ink);font-weight:600}
+.slot-code{font-size:var(--t-small);color:var(--c,var(--faint));font-weight:600}
+.slot-room{font-size:var(--t-room);font-weight:650;line-height:1.2;letter-spacing:-.015em;margin-top:1px}
+.slot-kind{font-size:var(--t-meta);color:var(--faint);margin-top:2px;
+           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot-r{font-size:var(--t-meta);color:var(--faint);margin-top:2px}
+.slot-due{font-size:var(--t-meta);color:var(--amber);margin-top:3px}
+.slot-n{font-size:var(--t-lead);font-weight:600}
+.slot .act-go{display:none}
 
-.flag-row{
-  display:grid;grid-template-columns:18px 1fr;gap:11px;align-items:start;
-  padding:12px 15px;background:var(--sunk);border:1px solid var(--edge);
-  border-radius:12px;font-size:14px;color:var(--dim);
-}
-.flag-row .mark{margin:1px 0 0}
-.flag-row b{color:var(--ink)}
-.flag-row em{display:block;font-style:normal;font-size:12.5px;color:var(--faint);margin-top:3px}
-.slot.other{border-left-color:var(--cool)}
-.slot.other.live{border-color:var(--cool);background:var(--sunk)}
+/* Tags read as words, not as shouted chips. */
+.live-tag,.next-tag,.done-tag{font-style:normal;font-size:var(--t-small);font-weight:600;margin-left:8px}
+.live-tag,.next-tag{color:var(--amber)}
+.done-tag{color:var(--faint)}
 
-/* Finished items leave the day. This is the way back to them, and it is
-   deliberately the quietest thing on the screen. */
-.earlier{
-  align-self:flex-start;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--faint);padding:9px 2px;font-weight:600;
-}
+/* One glyph, and only when it means something: ! exam, * graded, ^ due. */
+.mark{font-style:normal;font-weight:700;font-size:var(--t-small);margin-left:7px;color:var(--faint)}
+.mark.exam{color:var(--red)}
+.mark.big,.mark.due{color:var(--amber)}
+
+.note-day{padding:14px 0;border-bottom:1px solid var(--line)}
+.note-day.amb{border-left:2px solid var(--amber);padding-left:12px}
+.note-day b{display:block;font-size:var(--t-lead);font-weight:650}
+.note-day span{display:block;font-size:var(--t-meta);color:var(--faint);margin-top:2px}
+.earlier{font-size:var(--t-small);color:var(--faint);padding:11px 0;align-self:flex-start}
 .earlier:hover{color:var(--dim)}
 
-.live-tag{
-  font-style:normal;font-size:9.5px;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--bg);background:var(--c,var(--hot));
-  padding:2px 6px;border-radius:999px;margin-left:9px;vertical-align:2px;font-weight:700;
+/* ── School: segments ──────────────────────────────────── */
+.seg{display:flex;gap:22px;border-bottom:1px solid var(--line);margin-top:2px}
+.seg-b{
+  padding:9px 0 8px;font-size:var(--t-body);font-weight:600;color:var(--faint);
+  border-bottom:2px solid transparent;margin-bottom:-1px;
 }
-.slot .act-go{align-self:center;color:var(--faint)}
+.seg-b[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--amber)}
+.seg-n{font-style:normal;font-size:var(--t-small);color:var(--amber);margin-left:6px;font-weight:600}
+.seg-n:empty{display:none}
 
-.item{
-  padding:14px 15px;background:var(--raise);border:1px solid var(--edge);
-  border-left:3px solid var(--edge);border-radius:13px;
-  display:flex;flex-direction:column;gap:7px;
+/* ── School: the week as a selector ────────────────────── */
+.daystrip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line)}
+.day{
+  display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:9px 2px 8px;background:var(--bg);position:relative;
+  border-top:2px solid transparent;
 }
-.item.wait{border-left-color:var(--amb)}
-.item.settled{border-left-color:var(--ok)}
-.item.unsent{border-left-color:var(--faint);border-style:dashed}
-.item.soon{border-left-color:var(--hot)}
-.item-t{font-size:15px;overflow-wrap:anywhere}
-.item-t a{color:var(--hot);overflow-wrap:anywhere}
-.item-b{font-size:14px;color:var(--dim);overflow-wrap:anywhere}
-.item-f{
-  display:flex;gap:11px;align-items:center;flex-wrap:wrap;
-  font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:600;
-}
-/* Inbox status badges. These used to reuse .tick, which is the 26px round
-   task checkbox - so the word "done" rendered crammed inside a circle. */
-.state{
-  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
-  padding:2px 7px;border:1px solid currentColor;border-radius:999px;color:var(--faint);
-}
-.state.ok{color:var(--ok)}
-.state.pend{color:var(--amb)}
-.item-f .due{color:var(--hot)}
+.day.off{opacity:.4}
+.day.istoday .day-n{color:var(--amber)}
+.day.on{background:var(--up);border-top-color:var(--amber)}
+.day-w{font-size:var(--t-small);color:var(--faint)}
+.day-n{font-size:var(--t-lead);font-weight:650;line-height:1.15}
+.day-c{font-size:var(--t-small);color:var(--faint);line-height:1;letter-spacing:.1em}
+.day-flag{font-style:normal;font-size:9px;color:var(--amber);position:absolute;bottom:1px}
 
-.reply{
-  align-self:flex-start;margin-top:6px;font-size:11.5px;font-weight:600;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--hot);
-  border:1px solid currentColor;border-radius:999px;padding:6px 12px;
+/* ── School: course chips ──────────────────────────────── */
+.chips{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);margin-top:14px}
+.chip-c{
+  display:flex;flex-direction:column;align-items:center;padding:9px 2px;
+  background:var(--bg);border-bottom:2px solid var(--c);
 }
+.chip-c span{font-size:var(--t-small);color:var(--faint)}
+.chip-c b{font-size:var(--t-meta);font-weight:650}
+.chip-c:hover{background:var(--up)}
 
-/* Due soon - reads from the syllabi, so it is never empty when work exists. */
+/* ── Due ───────────────────────────────────────────────── */
 .due-row{
-  display:grid;grid-template-columns:52px 1fr;gap:13px;align-items:start;
-  padding:13px 15px;background:var(--raise);border:1px solid var(--edge);
-  border-left:3px solid var(--c);border-radius:13px;cursor:pointer;
+  display:grid;grid-template-columns:var(--gutter) 1fr;gap:14px;align-items:start;
+  padding:13px 0;border-bottom:1px solid var(--line);
+  border-left:2px solid transparent;
 }
-.due-row:hover{border-color:var(--c)}
-.due-row.urgent{background:var(--sunk)}
-.due-when{font-family:var(--num);font-size:11px;color:var(--faint);padding-top:2px;font-variant-numeric:tabular-nums}
-.due-when b{display:block;font-size:15px;color:var(--ink);font-weight:600;letter-spacing:-.01em}
-.due-row.urgent .due-when b{color:var(--hot)}
-.due-body{display:flex;flex-direction:column;gap:2px;min-width:0}
-.due-code{font-size:12px;letter-spacing:.02em;color:var(--c)}
-.due-what{font-size:15.5px;font-weight:600;line-height:1.3}
-.due-note{font-size:13px;color:var(--faint)}
-.item-out{font-size:13.5px;color:var(--dim);padding-top:8px;border-top:1px solid var(--edge)}
+.due-row.tappable{cursor:pointer}
+.due-row.urgent{border-left-color:var(--amber);padding-left:12px}
+.due-row.exam{border-left-color:var(--red);padding-left:12px}
+.due-when{font-size:var(--t-meta);color:var(--ink);font-weight:600;padding-top:2px}
+.due-when b{font-weight:600}
+.due-row.urgent .due-when b{color:var(--amber)}
+.due-row.exam .due-when b{color:var(--red)}
+.due-body{display:flex;flex-direction:column;min-width:0}
+.due-code{font-size:var(--t-small);color:var(--c,var(--faint));font-weight:600}
+.due-what{font-size:var(--t-lead);font-weight:600;line-height:1.3;margin-top:1px}
+.due-note{font-size:var(--t-meta);color:var(--faint);margin-top:2px}
+.due-row .act-go{display:none}
 
-/* ── task / info cards ─────────────────────────────────── */
+/* ── Tasks: the only screen with tick boxes ────────────── */
 .card{
-  display:grid;grid-template-columns:26px 1fr;gap:13px;align-items:start;
-  padding:15px 16px;background:var(--raise);
-  border:1px solid var(--edge);border-radius:14px;
-  transition:opacity .2s,transform .2s,border-color .15s,
-             height .2s ease,padding .2s ease,margin .2s ease;
+  display:grid;grid-template-columns:22px 1fr;gap:14px;align-items:start;
+  padding:14px 0;border-bottom:1px solid var(--line);
+  transition:opacity .2s,height .2s ease,padding .2s ease,margin .2s ease;
 }
-.card.soon{border-color:#4A3A22}
-.card.urgent{border-color:var(--hot-deep)}
-/* Collapses in place instead of vanishing, so the rows below never jump up
-   under a finger that is still on the screen. */
-.card.going{opacity:0;transform:translateX(28px);overflow:hidden;border-color:transparent}
+.card.going{opacity:0;overflow:hidden;border-color:transparent}
 .tick{
-  width:26px;height:26px;border-radius:50%;flex:none;margin-top:1px;
-  border:1.6px solid var(--faint);background:transparent;
-  display:grid;place-items:center;transition:border-color .15s,background .15s;
+  width:19px;height:19px;border-radius:50%;flex:none;margin-top:2px;
+  border:1.5px solid var(--faint);display:grid;place-items:center;
+  transition:border-color .15s,background .15s;
 }
-.tick::after{
-  content:"";width:10px;height:5.5px;
-  border-left:2px solid transparent;border-bottom:2px solid transparent;
-  transform:rotate(-45deg) translate(1px,-1px);transition:border-color .15s;
+.tick:hover{border-color:var(--green)}
+.tick:active{background:var(--green);border-color:var(--green)}
+.card-body{display:flex;flex-direction:column;min-width:0}
+.card-t{font-size:var(--t-lead);font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.card-t a{color:var(--amber)}
+.card-b{font-size:var(--t-meta);color:var(--faint);overflow-wrap:anywhere;line-height:1.45;margin-top:2px}
+.card-when{font-size:var(--t-small);color:var(--faint);margin-top:3px}
+.card-when.hot{color:var(--amber)}
+.pill{display:none}
+.reply{
+  align-self:flex-start;margin-top:8px;font-size:var(--t-small);font-weight:600;
+  color:var(--amber);border-bottom:1px solid currentColor;padding-bottom:1px;
 }
-.tick:hover{border-color:var(--ok)}
-.tick:hover::after{border-left-color:var(--ok);border-bottom-color:var(--ok)}
-.tick:active{background:var(--ok);border-color:var(--ok)}
-.card-body{display:flex;flex-direction:column;gap:5px;min-width:0}
-.pill{
-  align-self:flex-start;font-size:10px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--amb);border:1px solid currentColor;
-  padding:2px 7px;border-radius:999px;margin-bottom:2px;
-}
-.card-t{font-size:16px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
-.card-t a{color:var(--hot)}
-.card-b{font-size:14.5px;color:var(--dim);overflow-wrap:anywhere;line-height:1.5}
-.card-when{
-  font-size:10.5px;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--faint);margin-top:2px;
-}
-.card-when.hot{color:var(--hot)}
 
+/* ── Log ───────────────────────────────────────────────── */
+.head-flex{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.chip{font-size:var(--t-small);color:var(--faint);padding:6px 0}
+.chip[aria-pressed="true"]{color:var(--amber)}
+.item{
+  padding:13px 0;border-bottom:1px solid var(--line);
+  border-left:2px solid transparent;display:flex;flex-direction:column;gap:5px;
+}
+.item.wait{border-left-color:var(--amber);padding-left:12px}
+.item.settled{border-left-color:var(--line-lit);padding-left:12px}
+.item.unsent{border-left-color:var(--faint);padding-left:12px}
+.item-t{font-size:var(--t-body);overflow-wrap:anywhere}
+.item-t a{color:var(--amber);overflow-wrap:anywhere}
+.item-b{font-size:var(--t-meta);color:var(--dim);overflow-wrap:anywhere}
+.item-f{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;font-size:var(--t-small);color:var(--faint)}
+.state{font-size:var(--t-small);color:var(--faint)}
+.state.ok{color:var(--green)}
+.state.pend{color:var(--amber)}
+.more{color:var(--amber)}
+.item-out{font-size:var(--t-meta);color:var(--dim);padding-top:6px}
+.grp{
+  font-size:var(--t-small);color:var(--faint);font-weight:600;margin:16px 0 0;
+  padding-bottom:5px;border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;
+}
+.tappable{cursor:pointer}
 
-/* Bold carries meaning everywhere: it marks the thing you act on. */
-.next-val{font-weight:650}
-.next-det b{color:var(--ink);font-weight:600}
-.card-t strong,.item-t strong{color:var(--ink)}
-.course .act-go{padding-right:15px}
-
-/* One class, one hour, in the room you are walking to. */
-.sess-head{
-  padding:16px 17px 17px;background:var(--raise);border:1px solid var(--edge);
-  border-left:4px solid var(--c);border-radius:15px;
-}
-.sess-code{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--c);font-weight:700}
-.sess-title{font-size:23px;line-height:1.15;letter-spacing:-.02em;font-weight:650;margin:4px 0 0}
-.sess-where{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;margin-top:7px;font-size:15px;color:var(--dim)}
-.sess-where b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
-.done-tag{
-  font-style:normal;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--faint);border:1px solid currentColor;border-radius:999px;padding:2px 7px;
-}
-.topic{
-  padding:15px 16px;background:var(--sunk);border:1px solid var(--edge);
-  border-radius:13px;font-size:16px;line-height:1.5;color:var(--ink);
-}
-.mini{
-  padding:11px 14px;background:var(--raise);border:1px solid var(--edge);
-  border-radius:11px;font-size:14px;color:var(--dim);
-}
-.mini b{color:var(--ink);font-weight:650;margin-right:8px;font-variant-numeric:tabular-nums}
-.wide-btn{
-  margin-top:6px;padding:15px;border:1px solid var(--edge);border-radius:13px;
-  background:var(--raise);color:var(--dim);font-size:15px;text-align:center;width:100%;
-}
-.wide-btn:hover{border-color:var(--hot);color:var(--ink)}
-
-.back{
-  font-size:11px;letter-spacing:.05em;text-transform:uppercase;
-  color:var(--faint);padding:4px 0 2px;align-self:flex-start;
-}
-.back:hover{color:var(--hot)}
-#course-detail{display:flex;flex-direction:column;gap:16px}
-
-.gradebox{background:var(--raise);border:1px solid var(--edge);border-radius:13px;padding:6px 15px 12px}
+/* ── course + session detail ───────────────────────────── */
+.back{font-size:var(--t-small);color:var(--faint);padding:6px 0;align-self:flex-start}
+.back:hover{color:var(--amber)}
+#course-detail{display:flex;flex-direction:column;gap:14px}
+.sess-head{padding:0 0 14px 14px;border-bottom:1px solid var(--line);border-left:3px solid var(--c)}
+.sess-code{font-size:var(--t-small);color:var(--c);font-weight:600}
+.sess-title{font-size:22px;line-height:1.2;letter-spacing:-.015em;font-weight:600;margin:3px 0 0}
+.sess-where{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-top:6px;font-size:var(--t-room);font-weight:650}
+.sess-where b{font-weight:600;color:var(--dim);font-size:var(--t-meta)}
+.topic{font-size:var(--t-lead);line-height:1.5}
+.mini,.note-row,.flag-row{padding:12px 0;border-bottom:1px solid var(--line);font-size:var(--t-meta);color:var(--dim);line-height:1.5}
+.mini b{color:var(--ink);font-weight:650;margin-right:10px}
+.flag-row{display:grid;grid-template-columns:16px 1fr;gap:12px;align-items:start}
+.flag-row b{color:var(--ink)}
+.flag-row em{display:block;font-style:normal;font-size:var(--t-small);color:var(--faint);margin-top:2px}
+.wide-btn{margin-top:4px;padding:13px 0;border-top:1px solid var(--line);color:var(--faint);font-size:var(--t-meta);width:100%}
+.wide-btn:hover{color:var(--amber)}
+.gradbox{padding:0}
 .grow{
   display:grid;grid-template-columns:1fr auto;gap:10px;align-items:baseline;
-  padding:9px 0 5px;border-bottom:1px solid var(--edge);position:relative;font-size:14px;
+  padding:9px 0 7px;border-bottom:1px solid var(--line);position:relative;font-size:var(--t-meta);
 }
-.grow:last-child{border-bottom:0}
-.grow b{font-family:var(--num);font-size:14px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
-.grow i{
-  position:absolute;left:0;bottom:0;height:2px;width:var(--w);
-  background:var(--c);opacity:.65;border-radius:2px;
-}
-.note-row{
-  padding:12px 14px;background:var(--sunk);border:1px solid var(--edge);
-  border-radius:11px;font-size:14px;color:var(--dim);line-height:1.5;
-}
+.grow b{font-size:var(--t-meta);font-weight:650}
+.grow i{position:absolute;left:0;bottom:0;height:1.5px;width:var(--w);background:var(--c);opacity:.7}
 
-.dayrow{display:grid;grid-template-columns:46px 1fr;gap:11px;font-size:14px;padding:3px 0}
-.dayrow span:first-child{font-family:var(--num);color:var(--dim);font-variant-numeric:tabular-nums}
-.dayrow em{font-style:normal;font-size:12.5px;color:var(--faint);display:block}
-
-.empty{padding:17px;background:var(--sunk);border:1px dashed var(--edge);border-radius:13px;font-size:14px;color:var(--dim)}
-
-/* ── inbox grouping + expand ───────────────────────────── */
-.head-flex{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.chip{
-  font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
-  padding:8px 13px;border:1px solid var(--edge);border-radius:999px;color:var(--dim);
-}
-.chip[aria-pressed="true"]{color:var(--hot);border-color:var(--hot)}
-.grp{
-  display:flex;justify-content:space-between;align-items:baseline;
-  font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--faint);font-weight:500;margin:14px 2px 1px;
-}
-.grp:first-child{margin-top:2px}
-.grp span{color:var(--edge-lit)}
-.tappable{cursor:pointer;transition:border-color .15s}
-.tappable:hover{border-color:var(--edge-lit)}
-.more{color:var(--hot)}
-.sync{margin:2px 4px 0;font-size:12px;letter-spacing:0;color:var(--faint);overflow-wrap:anywhere}
-.sync.bad{color:var(--amb)}
-.sync.good{color:var(--ok)}
-.deskfoot{display:flex;gap:18px;padding:9px 4px 2px}
-.deskfoot button{padding:2px 0}
-.deskfoot button:disabled{opacity:.5}
-.gate-alts{display:flex;justify-content:space-between;gap:14px;padding:4px 2px 0}
-.gate-alts button{padding:6px 0}
-input[type=password]{
-  font:inherit;font-size:16px;padding:15px;background:var(--raise);color:var(--ink);
-  border:1px solid var(--edge);border-radius:12px;width:100%;
-}
-input[type=password]::placeholder{color:var(--faint)}
+.empty{padding:16px 0;font-size:var(--t-meta);color:var(--faint);border-bottom:1px solid var(--line)}
+.empty b{color:var(--ink)}
 
 /* ── tabs ──────────────────────────────────────────────── */
 .tabs{
   position:fixed;left:0;right:0;bottom:0;z-index:20;
-  display:grid;grid-template-columns:repeat(5,1fr);
-  background:rgba(14,13,11,.94);
-  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
-  border-top:1px solid var(--edge);padding-bottom:var(--sb);
+  display:grid;grid-template-columns:repeat(4,1fr);
+  background:rgba(16,14,11,.96);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);padding-bottom:var(--sb);
 }
-.tabs button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 2px 9px;color:var(--faint);position:relative}
-.tabs svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
-.tabs span{font-size:10px;letter-spacing:.01em;font-weight:600;text-transform:uppercase}
-.tabs button[aria-selected="true"]{color:var(--hot)}
-.dot{position:absolute;top:8px;right:calc(50% - 17px);width:6px;height:6px;border-radius:50%;background:var(--hot)}
+.tabs button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px;color:var(--faint);position:relative}
+.tabs svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tabs span{font-size:var(--t-small);font-weight:600}
+.tabs button[aria-selected="true"]{color:var(--amber)}
+.dot{position:absolute;top:6px;right:calc(50% - 16px);width:5px;height:5px;border-radius:50%;background:var(--amber)}
 
-/* ── toast ─────────────────────────────────────────────── */
 .toast{
-  position:fixed;left:50%;transform:translateX(-50%) translateY(14px);
-  bottom:calc(78px + var(--sb));z-index:30;
-  background:var(--sunk);border:1px solid var(--edge-lit);border-radius:11px;
-  padding:12px 17px;font-size:14px;max-width:88vw;
+  position:fixed;left:50%;transform:translateX(-50%) translateY(10px);
+  bottom:calc(70px + var(--sb));z-index:30;
+  background:var(--up);border:1px solid var(--line-lit);border-radius:3px;
+  padding:11px 16px;font-size:var(--t-meta);max-width:88vw;
   opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
 }
 .toast.up{opacity:1;transform:translateX(-50%) translateY(0)}
 
-@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
-
-/* Deliberately single-theme. This is a night-and-corridor app; one committed
-   palette reads better than a compromised light/dark pair. */
-
-
-/* ── School: segmented control ─────────────────────────── */
-.seg{
-  display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;
-  background:var(--sunk);border:1px solid var(--edge);border-radius:12px;margin-top:4px;
-}
-.seg-b{
-  padding:9px 8px;border-radius:9px;font-size:13px;font-weight:650;
-  letter-spacing:.02em;color:var(--faint);transition:background .15s,color .15s;
-}
-.seg-b[aria-selected="true"]{background:var(--raise);color:var(--ink)}
-.seg-n{
-  font-style:normal;font-size:10.5px;font-weight:700;margin-left:6px;
-  color:var(--amb);vertical-align:1px;
-}
-.seg-n:empty{display:none}
-
-/* ── School: the week as a selector, not a wall of text ── */
-.daystrip{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-.day{
-  display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 2px 8px;
-  background:var(--raise);border:1px solid var(--edge);border-radius:11px;
-  position:relative;transition:border-color .15s,background .15s;
-}
-.day.off{opacity:.45}
-.day.istoday{border-color:var(--hot)}
-.day.on{background:var(--sunk);border-color:var(--edge-lit)}
-.day.on.istoday{border-color:var(--hot)}
-.day-w{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
-.day-n{font-size:17px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.15}
-.day-c{font-size:11px;color:var(--dim);letter-spacing:.12em;line-height:1}
-.day.on .day-c{color:var(--hot)}
-.day-flag{
-  font-style:normal;font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--amb);position:absolute;bottom:1px;
+/* ── desktop ─────────────────────────────────────────────
+   There was no desktop layout at all: every row stretched the full width of a
+   monitor and the tab bar was pinned across the bottom of a 27-inch screen.
+   The column is now held to a readable measure and the tabs become a rail. */
+@media (min-width:900px){
+  .app{padding-bottom:0;padding-left:184px}
+  .panel{max-width:640px;margin:0 auto;padding:30px 32px 64px}
+  .tabs{
+    top:0;right:auto;bottom:0;width:184px;
+    grid-template-columns:1fr;grid-auto-rows:max-content;
+    align-content:start;gap:2px;padding:26px 14px;
+    border-top:0;border-right:1px solid var(--line);background:var(--bg);
+    -webkit-backdrop-filter:none;backdrop-filter:none;
+  }
+  .tabs button{flex-direction:row;justify-content:flex-start;gap:12px;padding:10px 12px;border-radius:3px}
+  .tabs button[aria-selected="true"]{background:var(--up)}
+  .tabs span{font-size:var(--t-body)}
+  .dot{position:static;margin-left:auto}
+  .toast{left:calc(184px + 50%);bottom:26px}
 }
 
-/* ── School: the class row, hierarchy inverted ─────────── */
-/* The room is the largest thing. He knows which class he has; he is looking
-   for the door. */
-.slot-code{font-size:13px;font-weight:600;color:var(--c,var(--dim));letter-spacing:.01em}
-.slot-room{font-size:18px;font-weight:650;line-height:1.2;letter-spacing:-.015em;margin-top:1px;color:var(--ink)}
-.slot-kind{
-  font-size:12.5px;color:var(--faint);margin-top:3px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.slot.ahead{border-left-color:var(--edge-lit);cursor:pointer}
-.next-tag{
-  font-style:normal;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--hot);border:1px solid currentColor;border-radius:999px;
-  padding:1px 6px;margin-left:9px;vertical-align:2px;font-weight:700;
-}
-.note-day{
-  padding:15px 16px;background:var(--sunk);border:1px solid var(--edge);
-  border-left:3px solid var(--dim);border-radius:12px;
-}
-.note-day.amb{border-left-color:var(--amb)}
-.note-day b{display:block;font-size:16px;color:var(--ink);font-weight:650}
-.note-day span{display:block;font-size:13.5px;color:var(--faint);margin-top:3px}
-
-/* ── School: course chips ──────────────────────────────── */
-.chips{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:2px}
-.chip-c{
-  display:flex;flex-direction:column;align-items:center;gap:0;padding:8px 2px 7px;
-  background:var(--raise);border:1px solid var(--edge);
-  border-bottom:2px solid var(--c);border-radius:10px;
-}
-.chip-c span{font-size:9.5px;letter-spacing:.06em;color:var(--faint);font-weight:600}
-.chip-c b{font-size:13px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
-.chip-c:hover{border-color:var(--c)}
-
-/* An exam reads as an exam from sixty days out. */
-.due-row.exam{border-left-color:var(--hot)}
-.due-code .mark{margin-left:7px;width:16px;height:16px;font-size:11px}
-.loglink{align-self:flex-start;position:relative;padding-right:14px}
-.loglink .dot{top:6px;right:0}
+/* Deliberately one theme. This is a night-and-corridor app; a single
+   committed palette reads better than a compromised light/dark pair. */

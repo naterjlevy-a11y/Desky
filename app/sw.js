@@ -7,7 +7,7 @@
 //     none, and writes must reach the network or fail loudly so the queue in
 //     localStorage keeps holding them.
 
-const CACHE = "desky-v8-0";
+const CACHE = "desky-v8-1";
 const SHELL = [
   "/",
   "/index.html",

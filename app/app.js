@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_KEY } from "/config.js";
 
-const VERSION = "8.0.0";
+const VERSION = "8.1.0";
 const TZ = "America/Toronto";
 const AUTH = "desk.auth";
 const QUEUE = "desk.queue";
@@ -531,20 +531,20 @@ function entryHTML(e, isNext) {
     const soonest = attached[0];
     const mark = soonest ? markFor(soonest.what) : null;
     const cls = e.live ? "slot live" : e.over ? "slot gone" : isNext ? "slot now" : "slot";
-    // "MECH 292 lab" -> kind "lab"; a bare code means a lecture.
-    const kind = e.code ? (r[3].replace(e.code, "").trim() || "Lecture") : r[3];
+    /* Three lines: what it is, where it is, what it covers. The kind (lab,
+       tutorial) rides along with the code, so the third line is free to carry
+       the topic on its own instead of "Lecture · Row reduction and RREF". */
     const topic = e.code ? topicFor(e.code, e.day) : null;
     return `<div class="${cls}"${e.code ? ` data-session="${esc(e.code)}|${esc(e.day)}|${e.idx}"` : ""}
         ${c ? ` style="--c:${c.colour}"` : ""}>
       <div class="slot-t"><b>${r[1]}</b><br>${r[2]}</div>
       <div>
-        <div class="slot-code">${esc(e.code || r[3])}${
+        <div class="slot-code">${esc(r[3])}${
           e.live ? '<i class="live-tag">now</i>' : isNext ? '<i class="next-tag">next</i>' : ""}${
           mark && mark.g !== "-" ? `<i class="mark ${mark.cls}" title="${esc(mark.label)}">${mark.g}</i>` : ""}</div>
         <div class="slot-room">${esc(PLACES[r[4]] || r[4])}</div>
-        <div class="slot-kind">${esc(kind)}${topic ? ` &middot; ${esc(topic)}` : ""}</div>
+        ${topic ? `<div class="slot-kind">${esc(topic)}</div>` : ""}
       </div>
-      ${e.code ? '<span class="act-go" aria-hidden="true">&rsaquo;</span>' : ""}
     </div>`;
   }
 
@@ -676,12 +676,14 @@ function renderToday() {
    class of the day it rolls forward to the next day that has one. */
 function paintNext(rows, nextIdx, n) {
   const live = rows.find((r) => toMin(r[1]) <= n && n <= toMin(r[2]));
+  /* Three lines, each doing one job, stacked in the order he reads them:
+     when, what, where. The room is the big one - that is what he opened the
+     app for. These used to be joined onto one line with a middle dot. */
   const setIt = (lbl, name, time, room, c) => {
-    $("next-lbl").textContent = lbl;
+    $("next-lbl").textContent = time ? `${lbl}, ${time}` : lbl;
     $("next-val").textContent = name;
-    $("next-det").innerHTML = [time && `<b>${esc(time)}</b>`, room && esc(PLACES[room] || room)]
-      .filter(Boolean).join(" &middot; ");
-    $("next").style.setProperty("--c", c || "var(--hot)");
+    $("next-det").textContent = room ? PLACES[room] || room : "";
+    $("next").style.setProperty("--c", c || "var(--amber)");
   };
 
   if (live) {
@@ -807,12 +809,18 @@ function allDue(back = 7) {
           away: daysUntil(a.day) });
   }
 
-  // Only DATED school cards. An undated one is a task, not a deadline, and
-  // belongs on Tasks where it can actually be ticked off.
-  for (const c of cards)
-    if (c.section === "school" && c.due)
-      add({ iso: c.due, code: "", what: c.title.replace(/^needs you:\s*/i, ""),
-            note: c.body, url: c.url, away: daysUntil(c.due) });
+  /* Cards deliberately do NOT feed this list.
+   *
+   * They used to, and the agent promptly filled Due with six cards duplicating
+   * the MECH 292 syllabus already sitting in COURSES, plus one for "MECH 292
+   * Lecture 2" - a lecture, filed as a deadline. Dedupe caught most of it and
+   * still missed "Design Report" against "Conceptual Design Report".
+   *
+   * There is now exactly one way a date reaches this screen: it is in a
+   * syllabus, or it is on his calendar. Anything an agent finds goes on the
+   * calendar and arrives here through the mirror. A card cannot pollute the
+   * deadline list because it is no longer a source for it. Cards are things
+   * you DO, and they live on Tasks. */
 
   return out
     .filter((d) => d.away >= -back)
@@ -1150,13 +1158,11 @@ function render() {
      tell which was which. Everything you act on is here; Due soon is a list of
      dates you read. The catch-all still matters: a card with section 'else' is
      legal in the schema and used to render on no screen at all. */
-  /* Tasks is things you DO. A dated school deadline is not one of those - it
-     is a fact about the term, and it lives in School > Due. What stays here is
-     everything undated plus anything that is not school or internships, which
-     also catches section 'else' - legal in the schema and previously rendered
-     on no screen at all. */
-  const tasks = cards.filter((c) =>
-    c.section !== "internships" && !(c.section === "school" && c.due));
+  /* Tasks is everything you DO. Two card sections exist now, not four:
+     internships go to Work, and every other card lands here whatever its
+     section says. That also catches 'school' and 'else', both legal in the
+     schema and both previously capable of rendering on no screen at all. */
+  const tasks = cards.filter((c) => c.section !== "internships");
   fill("tasks", tasks.map(cardRow).join(""),
     "Nothing needs you right now. Anything I can't finish myself lands here.");
   $("dot-tasks").hidden = tasks.length === 0;
