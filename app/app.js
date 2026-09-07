@@ -1,4 +1,25 @@
-import { SUPABASE_URL, SUPABASE_KEY } from "/config.js";
+/* config.js names a Supabase project, so it is gitignored and does not exist in
+ * a fresh clone or on a public deploy. This used to be a static import, which
+ * meant the module failed to load and the page came up blank with only a
+ * console error — the first thing anyone following a link would see.
+ *
+ * Missing or unfilled config now drops into a local demo instead. Same tables,
+ * same response shapes, backed by localStorage. Nothing leaves the browser.
+ */
+import { demoApi } from "/demo.js";
+
+let SUPABASE_URL = "";
+let SUPABASE_KEY = "";
+let DEMO = false;
+
+try {
+  const cfg = await import("/config.js");
+  SUPABASE_URL = cfg.SUPABASE_URL || "";
+  SUPABASE_KEY = cfg.SUPABASE_KEY || "";
+  if (!SUPABASE_URL || SUPABASE_URL.includes("YOUR-PROJECT") || !SUPABASE_KEY) DEMO = true;
+} catch {
+  DEMO = true;
+}
 
 const VERSION = "8.1.0";
 const TZ = "America/Toronto";
@@ -310,6 +331,7 @@ async function refresh() {
 }
 
 async function api(path, opts = {}) {
+  if (DEMO) return demoApi(path, opts);
   if (!session) throw new Error("signed out");
   if (Date.now() > session.expires_at - 60000) await refresh();
   if (!session) throw new Error("signed out");
@@ -1487,7 +1509,15 @@ document.addEventListener("click", (e) => {
 (async function boot() {
   tick(); setInterval(tick, 30000);
   tokensFromHash();
-  if (!session) { showGate(); }
+  if (DEMO) {
+    // No sign-in to do: the demo backend answers without a token. Skipping the
+    // gate is the whole point, otherwise the public link is a login wall for an
+    // account nobody can create.
+    document.body.dataset.demo = "1";
+    showApp(); render();
+    await pull();
+  }
+  else if (!session) { showGate(); }
   else {
     showApp(); render();
     await flush();
