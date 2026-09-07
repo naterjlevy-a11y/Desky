@@ -6,14 +6,14 @@
  * Missing or unfilled config now drops into a local demo instead. Same tables,
  * same response shapes, backed by localStorage. Nothing leaves the browser.
  */
-import { demoApi } from "/demo.js";
+import { demoApi } from "./demo.js";
 
 let SUPABASE_URL = "";
 let SUPABASE_KEY = "";
 let DEMO = false;
 
 try {
-  const cfg = await import("/config.js");
+  const cfg = await import("./config.js");
   SUPABASE_URL = cfg.SUPABASE_URL || "";
   SUPABASE_KEY = cfg.SUPABASE_KEY || "";
   if (!SUPABASE_URL || SUPABASE_URL.includes("YOUR-PROJECT") || !SUPABASE_KEY) DEMO = true;
@@ -1526,6 +1526,6 @@ document.addEventListener("click", (e) => {
     else if (matchMedia("(display-mode: standalone)").matches) say.focus();
   }
   if ("serviceWorker" in navigator) {
-    try { await navigator.serviceWorker.register("/sw.js"); } catch {}
+    try { await navigator.serviceWorker.register("./sw.js"); } catch {}
   }
 })();
